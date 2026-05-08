@@ -14,8 +14,8 @@ function toUsername(name: string, phone: string) {
   return `${name.replace(/\s+/g, "")}${phone.slice(-4)}`;
 }
 
-function usernameToEmail(username: string) {
-  return `${username}@studyroom.local`;
+function buildAuthEmail() {
+  return `user_${crypto.randomUUID().replace(/-/g, "")}@studyroom.local`;
 }
 
 function generateRandomPassword(length = 12) {
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
 
   const adminClient = createSupabaseClient(url, serviceRoleKey);
   const username = toUsername(name, phone);
-  const email = usernameToEmail(username);
+  const authEmail = buildAuthEmail();
   const phoneLast4 = phone.slice(-4);
   const displayName = `${name}${phoneLast4}`;
   const tempPassword = generateRandomPassword();
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
   }
 
   const { data: createdUser, error: createUserError } = await adminClient.auth.admin.createUser({
-    email,
+    email: authEmail,
     password: tempPassword,
     email_confirm: true,
     user_metadata: {
@@ -118,6 +118,7 @@ export async function POST(request: Request) {
     role: "teacher",
     name,
     username,
+    auth_email: authEmail,
     phone,
     phone_last4: phoneLast4,
     display_name: displayName,
@@ -133,7 +134,7 @@ export async function POST(request: Request) {
     teacher: {
       id: createdUser.user.id,
       username,
-      email,
+      auth_email: authEmail,
       name,
       phone,
       display_name: displayName,

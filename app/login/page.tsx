@@ -19,8 +19,7 @@ export default function LoginPage() {
   const normalizeEmail = (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return "";
-    if (trimmed.includes("@")) return trimmed.toLowerCase();
-    return `${trimmed.toLowerCase()}@studyroom.local`;
+    return trimmed.toLowerCase();
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -30,7 +29,20 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
-      const email = normalizeEmail(loginId);
+      let email = normalizeEmail(loginId);
+      if (!email.includes("@")) {
+        const response = await fetch("/api/auth/resolve-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: loginId.trim() }),
+        });
+        const payload = (await response.json()) as { auth_email?: string; error?: string };
+        if (!response.ok || !payload.auth_email) {
+          setError(payload.error ?? "등록된 아이디를 찾을 수 없습니다.");
+          return;
+        }
+        email = payload.auth_email;
+      }
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,

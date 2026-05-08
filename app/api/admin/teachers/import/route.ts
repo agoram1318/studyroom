@@ -17,8 +17,8 @@ function onlyDigits(value: string) {
   return value.replace(/\D/g, "");
 }
 
-function usernameToEmail(username: string) {
-  return `${username}@studyroom.local`;
+function buildAuthEmail() {
+  return `user_${crypto.randomUUID().replace(/-/g, "")}@studyroom.local`;
 }
 
 function toUsername(name: string, phone: string) {
@@ -118,10 +118,10 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const email = usernameToEmail(username);
+    const authEmail = buildAuthEmail();
     const tempPassword = generateRandomPassword();
     const { data: createdUser, error: createUserError } = await adminClient.auth.admin.createUser({
-      email,
+      email: authEmail,
       password: tempPassword,
       email_confirm: true,
       user_metadata: {
@@ -143,6 +143,7 @@ export async function POST(request: Request) {
       role: "teacher",
       name,
       username,
+      auth_email: authEmail,
       phone,
       phone_last4: phoneLast4,
       display_name: displayName,
@@ -159,7 +160,7 @@ export async function POST(request: Request) {
       name,
       phone,
       display_name: displayName,
-      email,
+      email: authEmail,
       temp_password: tempPassword,
     });
   }
