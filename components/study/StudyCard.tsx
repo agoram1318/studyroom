@@ -1,12 +1,19 @@
 import Link from "next/link";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import type { Study } from "@/types";
+import type { StudyStatus } from "@/types";
 
 type Props = {
-  study: Study;
+  study: {
+    id: string;
+    title: string;
+    status: StudyStatus;
+    totalLessons: number;
+    completedLessons: number;
+    latestUpdate: string;
+  };
 };
 
-function getStatusMeta(status: Study["status"]) {
+function getStatusMeta(status: StudyStatus) {
   if (status === "ongoing") return { tone: "green" as const, label: "진행중" };
   if (status === "scheduled") return { tone: "yellow" as const, label: "예정" };
   return { tone: "gray" as const, label: "종료" };

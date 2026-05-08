@@ -123,7 +123,7 @@ async function getViewer() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return { supabase, user: null, role: null as const };
+  if (!user) return { supabase, user: null, role: null };
 
   const { data: profile } = await supabase
     .from("profiles")
