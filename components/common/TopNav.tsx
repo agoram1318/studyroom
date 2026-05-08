@@ -7,8 +7,6 @@ import { createClient } from "@/lib/supabase/client";
 
 const links = [
   { href: "/dashboard", label: "선생님 홈" },
-  { href: "/studies/mid2-final", label: "스터디 상세" },
-  { href: "/studies/mid2-final/lessons/l3", label: "회차 상세" },
   { href: "/admin", label: "관리자" },
 ];
 
