@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { TeacherBulkImportPanel } from "@/components/admin/TeacherBulkImportPanel";
 import { PageHeader } from "@/components/common/PageHeader";
 import { TeacherCreateForm } from "@/components/admin/TeacherCreateForm";
 import { TeacherTable } from "@/components/admin/TeacherTable";
@@ -37,6 +38,7 @@ export default async function AdminTeachersPage() {
       />
 
       <TeacherCreateForm />
+      <TeacherBulkImportPanel />
 
       <div className="flex justify-end">
         <Link href="/admin/enrollments/import" className="text-sm font-extrabold text-[#3182F6]">
