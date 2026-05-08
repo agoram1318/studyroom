@@ -126,7 +126,7 @@ export function TeacherCreateForm() {
 
         <div className="md:col-span-2">
           <Button className="h-11" disabled={isSubmitting}>
-            {isSubmitting ? "생성 중..." : "참여자 계정 생성"}
+            {isSubmitting ? "생성 중..." : "참여자 추가"}
           </Button>
         </div>
       </form>
