@@ -2,8 +2,8 @@ import Link from "next/link";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { StudyCard } from "@/components/study/StudyCard";
-import { studies } from "@/lib/mock-data";
 import { createClient } from "@/lib/supabase/server";
+import { getDashboardStudies } from "@/lib/study-room";
 
 type ProfileRow = {
   name: string | null;
@@ -30,6 +30,7 @@ export default async function DashboardPage() {
   const heroTitle = teacherName
     ? `${teacherName} 선생님,\n환영합니다`
     : "선생님,\n환영합니다";
+  const studies = await getDashboardStudies();
   const ongoingStudy = studies.find((study) => study.status === "ongoing");
 
   return (

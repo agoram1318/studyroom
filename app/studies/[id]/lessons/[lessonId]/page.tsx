@@ -1,9 +1,9 @@
-import { notFound } from "next/navigation";
-import { Button } from "@/components/common/Button";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { MaterialList } from "@/components/study/MaterialList";
-import { studies } from "@/lib/mock-data";
+import { getLessonDetailForViewer } from "@/lib/study-room";
 
 type Props = {
   params: Promise<{ id: string; lessonId: string }>;
@@ -11,46 +11,75 @@ type Props = {
 
 export default async function LessonDetailPage({ params }: Props) {
   const { id, lessonId } = await params;
-  const study = studies.find((item) => item.id === id);
-  const lesson = study?.lessons.find((item) => item.id === lessonId);
+  const detail = await getLessonDetailForViewer(id, lessonId);
+  if (!detail) {
+    redirect("/dashboard");
+  }
 
-  if (!study || !lesson) notFound();
+  const { study, lesson, prevLessonId, nextLessonId } = detail;
+  const playableVideoUrl = lesson.feedbackVideoUrl || lesson.videoUrl;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={`${lesson.order}회차 ${lesson.title}`}
-        description="이번 회차에서는 제출 과제의 공통 피드백과 학교별 문항 구성 포인트를 정리해요."
+        description={lesson.summary}
         badges={
           <>
             <StatusBadge tone="blue">{lesson.order}회차</StatusBadge>
-            <StatusBadge tone="green">영상 공개중</StatusBadge>
+            <StatusBadge tone={playableVideoUrl ? "green" : "gray"}>
+              {playableVideoUrl ? "공개중" : "준비중"}
+            </StatusBadge>
           </>
         }
       />
 
       <section className="rounded-[28px] border border-[#E5E8EB] bg-white p-5 shadow-[0_12px_28px_rgba(25,31,40,0.06)] md:p-6">
-        <div className="grid aspect-video place-items-center rounded-3xl bg-gradient-to-br from-[#191F28] to-[#3A4658] text-white">
-          <div className="grid h-[76px] w-[76px] place-items-center rounded-full border border-white/20 bg-white/15 text-2xl backdrop-blur-xl">
-            ▶
+        <h2 className="mb-4 text-lg font-black tracking-[-0.03em] text-[#191F28]">피드백 영상</h2>
+        {playableVideoUrl ? (
+          <div className="grid gap-3">
+            <div className="grid aspect-video place-items-center rounded-3xl bg-gradient-to-br from-[#191F28] to-[#3A4658] text-white">
+              <div className="grid h-[76px] w-[76px] place-items-center rounded-full border border-white/20 bg-white/15 text-2xl backdrop-blur-xl">
+                ▶
+              </div>
+            </div>
+            <a
+              href={playableVideoUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-11 w-fit items-center justify-center rounded-2xl bg-[#3182F6] px-4 text-sm font-extrabold text-white"
+            >
+              영상 보기
+            </a>
           </div>
-        </div>
+        ) : (
+          <p className="rounded-2xl bg-[#F7F8FA] px-4 py-3 text-sm font-semibold text-[#6B7684]">
+            아직 피드백 영상이 준비되지 않았어요.
+          </p>
+        )}
       </section>
 
       <section className="grid gap-4 md:grid-cols-2">
         <article className="rounded-[22px] border border-[#E5E8EB] bg-white p-5 shadow-[0_10px_22px_rgba(25,31,40,0.035)]">
-          <h3 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">
-            이번 회차 자료예요
-          </h3>
+          <h3 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">피드백 자료</h3>
           <p className="mt-2 text-sm leading-6 text-[#6B7684]">
             강의와 함께 보면 좋은 자료를 정리했어요.
           </p>
-          <MaterialList materials={lesson.materials} />
+          {lesson.materials.length > 0 ? (
+            <MaterialList materials={lesson.materials} />
+          ) : (
+            <p className="mt-4 rounded-2xl bg-[#F7F8FA] px-4 py-3 text-sm font-semibold text-[#6B7684]">
+              아직 등록된 자료가 없어요.
+            </p>
+          )}
         </article>
 
         <article className="rounded-[22px] border border-[#E5E8EB] bg-white p-5 shadow-[0_10px_22px_rgba(25,31,40,0.035)]">
-          <h3 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">이번 회차 과제</h3>
+          <h3 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">과제 및 안내사항</h3>
           <p className="mt-2 text-sm leading-6 text-[#6B7684]">{lesson.assignment.title}</p>
+          {"assignmentNote" in lesson && lesson.assignmentNote ? (
+            <p className="mt-2 text-sm leading-6 text-[#6B7684]">{lesson.assignmentNote}</p>
+          ) : null}
           <div className="mt-4 grid gap-2.5">
             <div className="flex items-center justify-between rounded-2xl bg-[#F7F8FA] px-4 py-3.5">
               <span className="text-sm font-bold text-[#191F28]">제출 마감</span>
@@ -67,13 +96,32 @@ export default async function LessonDetailPage({ params }: Props) {
               </StatusBadge>
             </div>
           </div>
-          <div className="mt-5 flex flex-wrap gap-2">
-            <Button variant="primary">과제 제출하기</Button>
-            <Button variant="secondary" href="#">
-              톡방 바로가기
-            </Button>
-          </div>
         </article>
+      </section>
+
+      <section className="flex flex-wrap gap-2">
+        <Link
+          href={`/studies/${study.id}`}
+          className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#F2F4F6] px-4 text-sm font-extrabold text-[#191F28]"
+        >
+          스터디 상세로 돌아가기
+        </Link>
+        {prevLessonId ? (
+          <Link
+            href={`/studies/${study.id}/lessons/${prevLessonId}`}
+            className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#F2F4F6] px-4 text-sm font-extrabold text-[#191F28]"
+          >
+            이전 회차
+          </Link>
+        ) : null}
+        {nextLessonId ? (
+          <Link
+            href={`/studies/${study.id}/lessons/${nextLessonId}`}
+            className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#3182F6] px-4 text-sm font-extrabold text-white"
+          >
+            다음 회차
+          </Link>
+        ) : null}
       </section>
     </div>
   );
