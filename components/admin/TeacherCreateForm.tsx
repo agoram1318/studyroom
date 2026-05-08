@@ -94,7 +94,7 @@ export function TeacherCreateForm() {
         <input
           value={form.phone}
           onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
-          placeholder="전화번호 (숫자만)"
+          placeholder="전화번호 전체(숫자) 또는 뒤 4자리"
           className="h-11 rounded-2xl border border-[#E5E8EB] px-4 text-sm font-semibold outline-none"
         />
         <input

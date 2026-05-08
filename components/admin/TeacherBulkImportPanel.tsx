@@ -6,6 +6,7 @@ import { Button } from "@/components/common/Button";
 import { StatusBadge } from "@/components/common/StatusBadge";
 
 type RowData = {
+  account_id: string;
   name: string;
   phone: string;
   memo: string;
@@ -37,6 +38,15 @@ function toText(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function deriveFromAccountId(accountId: string) {
+  const match = accountId.trim().match(/^(.*?)(\d{4})$/);
+  if (!match) return null;
+  const name = match[1].trim();
+  const phoneLast4 = match[2];
+  if (!name) return null;
+  return { name, phone: phoneLast4 };
+}
+
 function parseSheet(file: File): Promise<RowData[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -48,15 +58,24 @@ function parseSheet(file: File): Promise<RowData[]> {
         const firstSheetName = workbook.SheetNames[0];
         if (!firstSheetName) throw new Error("시트가 없습니다.");
         const worksheet = workbook.Sheets[firstSheetName];
-        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: "" });
+        const rowsAsArray = XLSX.utils.sheet_to_json<Array<unknown>>(worksheet, {
+          header: 1,
           defval: "",
+          blankrows: false,
         });
 
-        const parsed = rows.map((row) => ({
-          name: toText(row.name),
-          phone: toText(row.phone),
-          memo: toText(row.memo),
-        }));
+        const parsed = rows.map((row, index) => {
+          const fallbackAccountId = toText(rowsAsArray[index + 1]?.[0]);
+          const accountId = toText(row.account_id || row.username || fallbackAccountId);
+          const fromAccountId = deriveFromAccountId(accountId);
+          return {
+            account_id: accountId,
+            name: fromAccountId?.name ?? toText(row.name),
+            phone: fromAccountId?.phone ?? toText(row.phone),
+            memo: toText(row.memo),
+          };
+        });
         resolve(parsed);
       } catch (error) {
         reject(error instanceof Error ? error : new Error("엑셀 파싱 오류"));
@@ -118,7 +137,7 @@ export function TeacherBulkImportPanel() {
     <section className="rounded-[24px] border border-[#E5E8EB] bg-white p-5 shadow-[0_10px_22px_rgba(25,31,40,0.035)] md:p-6">
       <h2 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">참여자 엑셀 일괄 생성</h2>
       <p className="mt-2 text-sm leading-6 text-[#6B7684]">
-        컬럼명은 `name`, `phone`, `memo`를 사용하세요. 아이디는 `이름+전화번호 뒤 4자리`, 비밀번호는 서버 랜덤으로 자동 생성됩니다.
+        `account_id`(예: 김부건1234) 한 컬럼만 올려도 생성됩니다. 또는 `name`, `phone`, `memo` 형식도 지원합니다.
       </p>
 
       <div className="mt-4 rounded-2xl border border-dashed border-[#C8D1DB] bg-[#FBFCFD] p-4">
@@ -151,15 +170,17 @@ export function TeacherBulkImportPanel() {
             <table className="w-full min-w-[680px] border-collapse bg-white text-sm">
               <thead className="bg-[#F7F8FA] text-left text-xs font-extrabold text-[#6B7684]">
                 <tr>
+                  <th className="px-3 py-2">명단값(account_id)</th>
                   <th className="px-3 py-2">이름</th>
-                  <th className="px-3 py-2">전화번호</th>
+                  <th className="px-3 py-2">전화번호(또는 뒤4자리)</th>
                   <th className="px-3 py-2">생성 아이디(예상)</th>
                   <th className="px-3 py-2">메모</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.slice(0, 50).map((row, index) => (
-                  <tr key={`${row.name}-${row.phone}-${index}`} className="border-t border-[#EEF1F4]">
+                  <tr key={`${row.account_id}-${row.name}-${row.phone}-${index}`} className="border-t border-[#EEF1F4]">
+                    <td className="px-3 py-2">{row.account_id || "-"}</td>
                     <td className="px-3 py-2">{row.name || "-"}</td>
                     <td className="px-3 py-2">{row.phone || "-"}</td>
                     <td className="px-3 py-2">

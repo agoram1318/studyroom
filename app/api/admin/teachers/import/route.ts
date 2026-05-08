@@ -7,6 +7,7 @@ type ProfileRow = {
 };
 
 type TeacherPayload = {
+  account_id?: string;
   name: string;
   phone: string;
   memo?: string;
@@ -22,6 +23,16 @@ function usernameToEmail(username: string) {
 
 function toUsername(name: string, phone: string) {
   return `${name.replace(/\s+/g, "")}${phone.slice(-4)}`;
+}
+
+function splitAccountId(accountId: string) {
+  const trimmed = accountId.trim();
+  const match = trimmed.match(/^(.*?)(\d{4})$/);
+  if (!match) return null;
+  const name = match[1].trim();
+  const last4 = match[2];
+  if (!name) return null;
+  return { name, last4 };
 }
 
 function generateRandomPassword(length = 12) {
@@ -81,8 +92,9 @@ export async function POST(request: Request) {
   const skipped: Array<{ username: string; reason: string }> = [];
 
   for (const row of teachers) {
-    const name = (row.name ?? "").trim();
-    const phone = onlyDigits(row.phone ?? "");
+    const fromAccountId = splitAccountId(row.account_id ?? "");
+    const name = fromAccountId?.name ?? (row.name ?? "").trim();
+    const phone = fromAccountId?.last4 ?? onlyDigits(row.phone ?? "");
     const memo = row.memo?.trim() || null;
     const username = name && phone ? toUsername(name, phone) : "";
 
@@ -90,8 +102,8 @@ export async function POST(request: Request) {
       skipped.push({ username: username || "(빈값)", reason: "필수 값 누락" });
       continue;
     }
-    if (!/^\d{10,11}$/.test(phone)) {
-      skipped.push({ username, reason: "전화번호 형식 오류" });
+    if (!/^(\d{4}|\d{10,11})$/.test(phone)) {
+      skipped.push({ username, reason: "전화번호는 10~11자리 또는 뒤 4자리여야 함" });
       continue;
     }
 

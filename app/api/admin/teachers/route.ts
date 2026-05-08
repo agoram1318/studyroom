@@ -62,9 +62,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "이름과 전화번호는 필수입니다." }, { status: 400 });
   }
 
-  if (!/^\d{10,11}$/.test(phone)) {
+  if (!/^(\d{4}|\d{10,11})$/.test(phone)) {
     return NextResponse.json(
-      { error: "전화번호는 10~11자리 숫자로 입력해 주세요." },
+      { error: "전화번호는 10~11자리 또는 뒤 4자리 숫자로 입력해 주세요." },
       { status: 400 },
     );
   }
