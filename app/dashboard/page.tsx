@@ -3,15 +3,40 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { StudyCard } from "@/components/study/StudyCard";
 import { studies } from "@/lib/mock-data";
+import { createClient } from "@/lib/supabase/server";
 
-export default function DashboardPage() {
+type ProfileRow = {
+  name: string | null;
+};
+
+export default async function DashboardPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let teacherName: string | null = null;
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("name")
+      .eq("id", user.id)
+      .single<ProfileRow>();
+
+    teacherName = profile?.name?.trim() || null;
+  }
+
+  const heroTitle = teacherName
+    ? `${teacherName} 선생님,\n환영합니다`
+    : "선생님,\n환영합니다";
   const ongoingStudy = studies.find((study) => study.status === "ongoing");
 
   return (
     <div className="space-y-10">
       <section className="grid gap-5 md:grid-cols-[1.15fr_0.85fr]">
         <PageHeader
-          title={"김OO 선생님,\n새로 올라온 영상이 있어요"}
+          title={heroTitle}
           description="참여 중인 스터디의 회차별 영상, 피드백, 자료를 한곳에서 바로 확인할 수 있어요."
         />
         <article className="flex min-h-[260px] flex-col justify-between rounded-[28px] bg-[#191F28] p-7 text-white shadow-[0_12px_28px_rgba(25,31,40,0.06)]">
