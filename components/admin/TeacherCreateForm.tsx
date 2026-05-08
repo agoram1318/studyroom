@@ -11,16 +11,12 @@ function cleanPhoneNumber(value: string) {
 type FormState = {
   name: string;
   phone: string;
-  username: string;
-  password: string;
   memo: string;
 };
 
 const initialForm: FormState = {
   name: "",
   phone: "",
-  username: "",
-  password: "",
   memo: "",
 };
 
@@ -29,15 +25,21 @@ export function TeacherCreateForm() {
   const [form, setForm] = useState<FormState>(initialForm);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [createdCredential, setCreatedCredential] = useState<{
+    username: string;
+    tempPassword: string;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const phoneLast4 = cleanPhoneNumber(form.phone).slice(-4);
   const displayName = form.name.trim() ? `${form.name.trim()}${phoneLast4}` : "";
+  const autoUsername = displayName;
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setSuccess("");
+    setCreatedCredential(null);
     setIsSubmitting(true);
 
     try {
@@ -47,19 +49,25 @@ export function TeacherCreateForm() {
         body: JSON.stringify({
           name: form.name,
           phone: form.phone,
-          username: form.username,
-          password: form.password,
           memo: form.memo,
         }),
       });
 
-      const payload = (await response.json()) as { error?: string; success?: boolean };
+      const payload = (await response.json()) as {
+        error?: string;
+        success?: boolean;
+        teacher?: { username?: string; temp_password?: string };
+      };
       if (!response.ok) {
         setError(payload.error ?? "참여자 계정 생성에 실패했습니다.");
         return;
       }
 
-      setSuccess("참여자 계정을 생성했습니다. 아이디와 비밀번호를 전달해 주세요.");
+      setSuccess("참여자 계정을 생성했습니다. 아래 임시 비밀번호를 전달해 주세요.");
+      setCreatedCredential({
+        username: payload.teacher?.username ?? autoUsername,
+        tempPassword: payload.teacher?.temp_password ?? "",
+      });
       setForm(initialForm);
       router.refresh();
     } catch (requestError) {
@@ -73,7 +81,7 @@ export function TeacherCreateForm() {
     <section className="rounded-[24px] border border-[#E5E8EB] bg-white p-5 shadow-[0_10px_22px_rgba(25,31,40,0.035)] md:p-6">
       <h2 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">참여자 계정 생성</h2>
       <p className="mt-2 text-sm leading-6 text-[#6B7684]">
-        이름과 전화번호를 기준으로 표시명을 자동 생성하고, 아이디는 내부 이메일로 변환됩니다.
+        아이디는 `이름+전화번호 뒤 4자리`로 자동 생성되고, 비밀번호는 랜덤으로 자동 발급됩니다.
       </p>
 
       <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={submit}>
@@ -90,19 +98,6 @@ export function TeacherCreateForm() {
           className="h-11 rounded-2xl border border-[#E5E8EB] px-4 text-sm font-semibold outline-none"
         />
         <input
-          value={form.username}
-          onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
-          placeholder="아이디 (영문/숫자)"
-          className="h-11 rounded-2xl border border-[#E5E8EB] px-4 text-sm font-semibold outline-none"
-        />
-        <input
-          value={form.password}
-          onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
-          placeholder="초기 비밀번호"
-          type="password"
-          className="h-11 rounded-2xl border border-[#E5E8EB] px-4 text-sm font-semibold outline-none"
-        />
-        <input
           value={form.memo}
           onChange={(event) => setForm((prev) => ({ ...prev, memo: event.target.value }))}
           placeholder="메모 (선택)"
@@ -111,6 +106,9 @@ export function TeacherCreateForm() {
 
         <div className="rounded-2xl bg-[#F7F8FA] px-4 py-3 text-sm font-semibold text-[#6B7684] md:col-span-2">
           자동 생성 표시명: <span className="font-extrabold text-[#191F28]">{displayName || "-"}</span>
+        </div>
+        <div className="rounded-2xl bg-[#F7F8FA] px-4 py-3 text-sm font-semibold text-[#6B7684] md:col-span-2">
+          자동 생성 아이디: <span className="font-extrabold text-[#191F28]">{autoUsername || "-"}</span>
         </div>
 
         {error ? (
@@ -122,6 +120,12 @@ export function TeacherCreateForm() {
           <p className="rounded-xl bg-[#E9F8F0] px-3 py-2 text-sm font-semibold text-[#007A48] md:col-span-2">
             {success}
           </p>
+        ) : null}
+        {createdCredential ? (
+          <div className="rounded-2xl border border-[#D7E6FB] bg-[#E8F3FF] px-4 py-3 text-sm font-semibold text-[#2E6FD1] md:col-span-2">
+            아이디: <span className="font-extrabold">{createdCredential.username}</span> / 임시 비밀번호:{" "}
+            <span className="font-extrabold">{createdCredential.tempPassword || "(확인 실패)"}</span>
+          </div>
         ) : null}
 
         <div className="md:col-span-2">

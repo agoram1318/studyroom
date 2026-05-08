@@ -8,7 +8,6 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 type RowData = {
   name: string;
   phone: string;
-  username: string;
   memo: string;
 };
 
@@ -56,7 +55,6 @@ function parseSheet(file: File): Promise<RowData[]> {
         const parsed = rows.map((row) => ({
           name: toText(row.name),
           phone: toText(row.phone),
-          username: toText(row.username),
           memo: toText(row.memo),
         }));
         resolve(parsed);
@@ -120,7 +118,7 @@ export function TeacherBulkImportPanel() {
     <section className="rounded-[24px] border border-[#E5E8EB] bg-white p-5 shadow-[0_10px_22px_rgba(25,31,40,0.035)] md:p-6">
       <h2 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">참여자 엑셀 일괄 생성</h2>
       <p className="mt-2 text-sm leading-6 text-[#6B7684]">
-        컬럼명은 `name`, `phone`, `username`, `memo`를 사용하세요. 비밀번호는 서버에서 랜덤 생성됩니다.
+        컬럼명은 `name`, `phone`, `memo`를 사용하세요. 아이디는 `이름+전화번호 뒤 4자리`, 비밀번호는 서버 랜덤으로 자동 생성됩니다.
       </p>
 
       <div className="mt-4 rounded-2xl border border-dashed border-[#C8D1DB] bg-[#FBFCFD] p-4">
@@ -155,16 +153,20 @@ export function TeacherBulkImportPanel() {
                 <tr>
                   <th className="px-3 py-2">이름</th>
                   <th className="px-3 py-2">전화번호</th>
-                  <th className="px-3 py-2">아이디</th>
+                  <th className="px-3 py-2">생성 아이디(예상)</th>
                   <th className="px-3 py-2">메모</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.slice(0, 50).map((row, index) => (
-                  <tr key={`${row.username}-${index}`} className="border-t border-[#EEF1F4]">
+                  <tr key={`${row.name}-${row.phone}-${index}`} className="border-t border-[#EEF1F4]">
                     <td className="px-3 py-2">{row.name || "-"}</td>
                     <td className="px-3 py-2">{row.phone || "-"}</td>
-                    <td className="px-3 py-2">{row.username || "-"}</td>
+                    <td className="px-3 py-2">
+                      {row.name && row.phone
+                        ? `${row.name.replace(/\s+/g, "")}${row.phone.replace(/\D/g, "").slice(-4)}`
+                        : "-"}
+                    </td>
                     <td className="px-3 py-2">{row.memo || "-"}</td>
                   </tr>
                 ))}

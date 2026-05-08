@@ -9,7 +9,6 @@ type ProfileRow = {
 type TeacherPayload = {
   name: string;
   phone: string;
-  username: string;
   memo?: string;
 };
 
@@ -18,7 +17,11 @@ function onlyDigits(value: string) {
 }
 
 function usernameToEmail(username: string) {
-  return `${username.toLowerCase()}@studyroom.local`;
+  return `${username}@studyroom.local`;
+}
+
+function toUsername(name: string, phone: string) {
+  return `${name.replace(/\s+/g, "")}${phone.slice(-4)}`;
 }
 
 function generateRandomPassword(length = 12) {
@@ -79,16 +82,12 @@ export async function POST(request: Request) {
 
   for (const row of teachers) {
     const name = (row.name ?? "").trim();
-    const username = (row.username ?? "").trim().toLowerCase();
     const phone = onlyDigits(row.phone ?? "");
     const memo = row.memo?.trim() || null;
+    const username = name && phone ? toUsername(name, phone) : "";
 
-    if (!name || !username || !phone) {
+    if (!name || !phone) {
       skipped.push({ username: username || "(빈값)", reason: "필수 값 누락" });
-      continue;
-    }
-    if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
-      skipped.push({ username, reason: "아이디 형식 오류" });
       continue;
     }
     if (!/^\d{10,11}$/.test(phone)) {

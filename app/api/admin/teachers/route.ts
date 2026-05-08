@@ -10,8 +10,22 @@ function onlyDigits(value: string) {
   return value.replace(/\D/g, "");
 }
 
+function toUsername(name: string, phone: string) {
+  return `${name.replace(/\s+/g, "")}${phone.slice(-4)}`;
+}
+
 function usernameToEmail(username: string) {
-  return `${username.toLowerCase()}@studyroom.local`;
+  return `${username}@studyroom.local`;
+}
+
+function generateRandomPassword(length = 12) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*";
+  const random = crypto.getRandomValues(new Uint32Array(length));
+  let password = "";
+  for (let i = 0; i < length; i += 1) {
+    password += chars[random[i] % chars.length];
+  }
+  return password;
 }
 
 export async function POST(request: Request) {
@@ -37,26 +51,15 @@ export async function POST(request: Request) {
   const body = (await request.json()) as {
     name?: string;
     phone?: string;
-    username?: string;
-    password?: string;
     memo?: string;
   };
 
   const name = body.name?.trim() ?? "";
-  const username = body.username?.trim().toLowerCase() ?? "";
   const phone = onlyDigits(body.phone ?? "");
-  const password = body.password ?? "";
   const memo = body.memo?.trim() || null;
 
-  if (!name || !username || !password) {
-    return NextResponse.json({ error: "이름, 아이디, 비밀번호는 필수입니다." }, { status: 400 });
-  }
-
-  if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
-    return NextResponse.json(
-      { error: "아이디는 영문 소문자/숫자/._- 조합 3~30자여야 합니다." },
-      { status: 400 },
-    );
+  if (!name || !phone) {
+    return NextResponse.json({ error: "이름과 전화번호는 필수입니다." }, { status: 400 });
   }
 
   if (!/^\d{10,11}$/.test(phone)) {
@@ -64,10 +67,6 @@ export async function POST(request: Request) {
       { error: "전화번호는 10~11자리 숫자로 입력해 주세요." },
       { status: 400 },
     );
-  }
-
-  if (password.length < 6) {
-    return NextResponse.json({ error: "초기 비밀번호는 6자 이상이어야 합니다." }, { status: 400 });
   }
 
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -80,9 +79,11 @@ export async function POST(request: Request) {
   }
 
   const adminClient = createSupabaseClient(url, serviceRoleKey);
+  const username = toUsername(name, phone);
   const email = usernameToEmail(username);
   const phoneLast4 = phone.slice(-4);
   const displayName = `${name}${phoneLast4}`;
+  const tempPassword = generateRandomPassword();
 
   const { data: existingByUsername } = await adminClient
     .from("profiles")
@@ -96,7 +97,7 @@ export async function POST(request: Request) {
 
   const { data: createdUser, error: createUserError } = await adminClient.auth.admin.createUser({
     email,
-    password,
+    password: tempPassword,
     email_confirm: true,
     user_metadata: {
       name,
@@ -136,6 +137,7 @@ export async function POST(request: Request) {
       name,
       phone,
       display_name: displayName,
+      temp_password: tempPassword,
       memo,
     },
   });
