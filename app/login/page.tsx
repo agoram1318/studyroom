@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/common/Button";
 import { createClient } from "@/lib/supabase/client";
@@ -12,10 +11,17 @@ type ProfileRow = {
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const normalizeEmail = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    if (trimmed.includes("@")) return trimmed.toLowerCase();
+    return `${trimmed.toLowerCase()}@studyroom.local`;
+  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -24,6 +30,7 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
+      const email = normalizeEmail(loginId);
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -69,15 +76,15 @@ export default function LoginPage() {
           로그인
         </h1>
         <p className="mt-3 text-sm leading-6 text-[#6B7684]">
-          이메일과 비밀번호로 로그인해 주세요.
+          아이디 또는 이메일과 비밀번호로 로그인해 주세요.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-3">
           <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="이메일"
+            type="text"
+            value={loginId}
+            onChange={(event) => setLoginId(event.target.value)}
+            placeholder="아이디 또는 이메일"
             className="h-12 w-full rounded-2xl border border-[#E5E8EB] px-4 text-sm font-semibold text-[#191F28] outline-none placeholder:text-[#9AA5B1]"
           />
           <input
@@ -98,13 +105,6 @@ export default function LoginPage() {
             {isSubmitting ? "로그인 중..." : "로그인"}
           </Button>
         </form>
-
-        <p className="mt-5 text-center text-sm font-semibold text-[#6B7684]">
-          계정이 없나요?{" "}
-          <Link href="/signup" className="font-extrabold text-[#3182F6]">
-            회원가입
-          </Link>
-        </p>
       </section>
     </div>
   );

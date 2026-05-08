@@ -36,6 +36,9 @@ export default function AdminPage() {
             <Link href="/admin/studies" className="text-sm font-extrabold text-[#3182F6]">
               스터디 관리
             </Link>
+            <Link href="/admin/teachers" className="text-sm font-extrabold text-[#3182F6]">
+              참여자 관리
+            </Link>
             <Link href="/admin/enrollments/import" className="text-sm font-extrabold text-[#3182F6]">
               엑셀 일괄 배정
             </Link>

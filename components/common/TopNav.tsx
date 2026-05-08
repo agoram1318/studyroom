@@ -87,12 +87,6 @@ export function TopNav() {
               >
                 로그인
               </Link>
-              <Link
-                href="/signup"
-                className="rounded-full bg-white px-3.5 py-2 text-sm font-bold text-[#191F28] shadow-[0_6px_14px_rgba(25,31,40,0.04)]"
-              >
-                회원가입
-              </Link>
             </>
           )}
         </div>
