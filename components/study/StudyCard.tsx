@@ -54,9 +54,12 @@ export function StudyCard({ study }: Props) {
         </div>
       </div>
 
+      {/* [DEBUG] study.id — 이동 경로 확인용 임시 표시 */}
+      <p className="mt-3 truncate font-mono text-[10px] text-[#C0C7D0]">{study.id}</p>
+
       <Link
         href={`/studies/${study.id}`}
-        className="mt-5 flex items-center justify-between text-sm font-extrabold text-[#3182F6]"
+        className="mt-3 flex items-center justify-between text-sm font-extrabold text-[#3182F6]"
       >
         <span>스터디룸 입장</span>
         <span aria-hidden>→</span>

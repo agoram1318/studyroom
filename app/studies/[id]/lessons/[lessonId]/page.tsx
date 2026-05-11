@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { MaterialList } from "@/components/study/MaterialList";
-import { getLessonDetailForViewer } from "@/lib/study-room";
+import { UNAUTHORIZED, getLessonDetailForViewer } from "@/lib/study-room";
 
 type Props = {
   params: Promise<{ id: string; lessonId: string }>;
@@ -12,6 +12,31 @@ type Props = {
 export default async function LessonDetailPage({ params }: Props) {
   const { id, lessonId } = await params;
   const detail = await getLessonDetailForViewer(id, lessonId);
+
+  if (detail === UNAUTHORIZED) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
+        <div className="rounded-[28px] border border-[#FFD6D6] bg-[#FFF5F5] p-10 shadow-sm">
+          <p className="text-4xl">🔒</p>
+          <h1 className="mt-4 text-2xl font-black tracking-[-0.04em] text-[#191F28]">
+            접근 권한이 없습니다
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-[#6B7684]">
+            이 스터디에 등록되지 않았거나 접근 권한이 없어요.
+            <br />
+            담당자에게 문의해 주세요.
+          </p>
+          <Link
+            href="/dashboard"
+            className="mt-6 inline-flex h-11 items-center justify-center rounded-2xl bg-[#3182F6] px-6 text-sm font-extrabold text-white"
+          >
+            대시보드로 돌아가기
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (!detail) {
     redirect("/dashboard");
   }

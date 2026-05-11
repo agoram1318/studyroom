@@ -82,6 +82,7 @@ export type LessonDetailData = {
   nextLessonId: string | null;
 };
 
+
 function mapStudyStatus(value: StudyRow["status"]): Study["status"] {
   if (value === "active") return "ongoing";
   if (value === "ended") return "completed";
@@ -195,31 +196,24 @@ export async function getDashboardStudies() {
   }));
 }
 
-export async function getStudyDetailForViewer(studyId: string): Promise<StudyDetailData | null> {
+/** DB에 스터디가 존재하지만 현재 사용자에게 접근 권한이 없음을 나타내는 sentinel 값 */
+export const UNAUTHORIZED = "unauthorized" as const;
+export type StudyDetailResult = StudyDetailData | typeof UNAUTHORIZED | null;
+export type LessonDetailResult = LessonDetailData | typeof UNAUTHORIZED | null;
+
+export async function getStudyDetailForViewer(studyId: string): Promise<StudyDetailResult> {
   const { supabase, user, role } = await getViewer();
   if (!user) return null;
 
-  if (role !== "admin") {
-    const allowedIds = await getAllowedStudyIds(user.id);
-    if (!allowedIds.has(studyId)) return null;
-  }
-
+  // DB 조회를 먼저 수행 (enrollment 체크 전 — mock ID가 enrollment 체크에서 걸리는 문제 방지)
   const { data: studyRow, error: studyError } = await supabase
     .from("studies")
     .select("id, title, description, status, lesson_count")
     .eq("id", studyId)
     .maybeSingle<StudyRow>();
 
-  const { data: lessonRows, error: lessonError } = await supabase
-    .from("lessons")
-    .select(
-      "id, study_id, title, summary, lesson_order, status, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date",
-    )
-    .eq("study_id", studyId)
-    .order("lesson_order", { ascending: true })
-    .returns<LessonRow[]>();
-
-  if (studyError || lessonError || !studyRow) {
+  // DB가 응답 불가거나 스터디가 없으면 → mock 데이터로 폴백 (enrollment 체크 불필요)
+  if (studyError || !studyRow) {
     const mockStudy = mockStudies.find((item) => item.id === studyId);
     if (!mockStudy) return null;
     return {
@@ -243,6 +237,21 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
       })),
     };
   }
+
+  // 실제 DB 스터디: admin이 아닌 경우 enrollment 체크
+  if (role !== "admin") {
+    const allowedIds = await getAllowedStudyIds(user.id);
+    if (!allowedIds.has(studyId)) return UNAUTHORIZED;
+  }
+
+  const { data: lessonRows } = await supabase
+    .from("lessons")
+    .select(
+      "id, study_id, title, summary, lesson_order, status, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date",
+    )
+    .eq("study_id", studyId)
+    .order("lesson_order", { ascending: true })
+    .returns<LessonRow[]>();
 
   const lessonIds = (lessonRows ?? []).map((lesson) => lesson.id);
   const materialCountMap = new Map<string, number>();
@@ -295,9 +304,11 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
 export async function getLessonDetailForViewer(
   studyId: string,
   lessonId: string,
-): Promise<LessonDetailData | null> {
-  const studyDetail = await getStudyDetailForViewer(studyId);
-  if (!studyDetail) return null;
+): Promise<LessonDetailResult> {
+  const studyDetailResult = await getStudyDetailForViewer(studyId);
+  if (studyDetailResult === null) return null;
+  if (studyDetailResult === UNAUTHORIZED) return UNAUTHORIZED;
+  const studyDetail = studyDetailResult;
 
   const { supabase } = await getViewer();
   const { data: lessonRow, error: lessonError } = await supabase
