@@ -382,14 +382,22 @@ export default function AdminLessonsPage() {
       return;
     }
     setError(""); setMessage(""); setIsSubmitting(true);
-    const { error: e } = await createClient().from("lessons").insert({
+    const basePayload = {
       study_id: selectedStudyId,
       title: lessonForm.title.trim(),
       lesson_order: lessonForm.lesson_order,
       feedback_video_url: lessonForm.feedback_video_url.trim() || null,
       summary: lessonForm.summary.trim() || null,
+    };
+    let { error: e } = await createClient().from("lessons").insert({
+      ...basePayload,
       status: "draft",
     });
+    // status 컬럼이 아직 DB에 없는 경우 방어: status 없이 재시도
+    if (e && /status/i.test(e.message)) {
+      const { error: e2 } = await createClient().from("lessons").insert(basePayload);
+      e = e2 ?? null;
+    }
     if (e) { setError(e.message); setIsSubmitting(false); return; }
     setMessage(`${lessonForm.lesson_order}회차를 추가했습니다.`);
     setShowLessonForm(false);

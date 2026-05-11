@@ -20,7 +20,7 @@ type LessonRow = {
   title: string;
   summary: string | null;
   lesson_order: number | null;
-  status: "draft" | "published" | "ready" | null;
+  status: "draft" | "open" | "ready" | "closed" | null;
   is_published: boolean | null;
   video_url: string | null;
   feedback_video_url: string | null;
@@ -96,9 +96,9 @@ function mapStudyStatus(value: StudyRow["status"]): Study["status"] {
 }
 
 function mapLessonStatus(value: LessonRow["status"], hasVideo: boolean): Lesson["status"] {
-  if (hasVideo || value === "published") return "uploaded";
-  if (value === "ready") return "ready";
-  return "soon";
+  if (hasVideo || value === "closed") return "uploaded";
+  if (value === "ready" || value === "open") return "ready";
+  return "soon"; // draft, null, 또는 DB에 status 컬럼이 없는 경우
 }
 
 function mapDbToMaterialType(
