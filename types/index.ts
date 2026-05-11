@@ -7,11 +7,16 @@ export type BadgeTone =
   | "red"
   | "gray";
 
+/** 회차 피드백 자료 (구글 드라이브 등 외부 링크) */
+export type MaterialType = "pdf" | "image" | "link";
+
 export type Material = {
   id: string;
-  name: string;
-  type: "pdf" | "sheet" | "link";
-  href: string;
+  /** 자료명 */
+  title: string;
+  /** 공유 링크 (보기 버튼) */
+  fileUrl: string;
+  materialType: MaterialType;
 };
 
 export type Lesson = {

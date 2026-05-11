@@ -19,7 +19,13 @@ export const studies: Study[] = [
         summary: "스터디 진행 방식과 과제 제출 기준 안내",
         status: "ready",
         materials: [
-          { id: "m1", name: "OT 안내자료.pdf", type: "pdf", href: "#" },
+          {
+            id: "m1",
+            title: "OT 안내자료",
+            materialType: "pdf",
+            fileUrl:
+              "https://drive.google.com/file/d/1OT_SAMPLE_FILE_ID_0000000000/view?usp=sharing",
+          },
         ],
         assignment: {
           title: "이번 학기 출제 범위 정리",
@@ -34,8 +40,19 @@ export const studies: Study[] = [
         summary: "학교별 출제 패턴 분석 및 예상문항 설계",
         status: "ready",
         materials: [
-          { id: "m2", name: "시험지 분석 템플릿.xlsx", type: "sheet", href: "#" },
-          { id: "m3", name: "학교별 기출 묶음.pdf", type: "pdf", href: "#" },
+          {
+            id: "m2",
+            title: "시험지 분석 참고 링크",
+            materialType: "link",
+            fileUrl: "https://www.notion.so",
+          },
+          {
+            id: "m3",
+            title: "학교별 기출 묶음",
+            materialType: "pdf",
+            fileUrl:
+              "https://drive.google.com/open?id=1PAST_PAPER_BUNDLE_FILE_ID_00",
+          },
         ],
         assignment: {
           title: "예상문항 3개 작성",
@@ -51,9 +68,27 @@ export const studies: Study[] = [
         status: "uploaded",
         hasNewVideo: true,
         materials: [
-          { id: "m4", name: "3회차 피드백 정리본.pdf", type: "pdf", href: "#" },
-          { id: "m5", name: "학교별 변형문항 예시.pdf", type: "pdf", href: "#" },
-          { id: "m6", name: "기말대비 체크리스트.xlsx", type: "sheet", href: "#" },
+          {
+            id: "m4",
+            title: "3회차 피드백 정리본",
+            materialType: "pdf",
+            fileUrl:
+              "https://drive.google.com/file/d/1FEEDBACK_DOC_FILE_ID_0000000000/view?usp=sharing",
+          },
+          {
+            id: "m5",
+            title: "학교별 변형문항 예시",
+            materialType: "pdf",
+            fileUrl:
+              "https://drive.google.com/file/d/1VARIANT_EXAMPLE_FILE_ID_00000000/view?usp=sharing",
+          },
+          {
+            id: "m6",
+            title: "기말대비 체크 이미지",
+            materialType: "image",
+            fileUrl:
+              "https://drive.google.com/open?id=1CHECKLIST_IMAGE_FILE_ID_000000",
+          },
         ],
         assignment: {
           title: "학교별 예상문항 5개 제작",

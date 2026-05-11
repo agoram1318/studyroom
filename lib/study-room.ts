@@ -34,6 +34,8 @@ type MaterialRow = {
   lesson_id: string;
   title: string | null;
   name: string | null;
+  /** DB 컬럼 material_type (마이그레이션 후 사용) */
+  material_type?: string | null;
   file_type: string | null;
   type: string | null;
   file_url: string | null;
@@ -92,9 +94,24 @@ function mapLessonStatus(value: LessonRow["status"], hasVideo: boolean): Lesson[
   return "soon";
 }
 
-function mapMaterialType(value: string | null): Material["type"] {
-  if (value === "pdf") return "pdf";
-  if (value === "sheet" || value === "xlsx" || value === "csv") return "sheet";
+function mapDbToMaterialType(
+  materialType: string | null | undefined,
+  fileType: string | null,
+  legacyType: string | null,
+): Material["materialType"] {
+  const raw = (materialType ?? fileType ?? legacyType ?? "").toLowerCase();
+  if (raw === "pdf") return "pdf";
+  if (
+    raw === "image" ||
+    raw === "img" ||
+    raw === "png" ||
+    raw === "jpg" ||
+    raw === "jpeg" ||
+    raw === "gif" ||
+    raw === "webp"
+  ) {
+    return "image";
+  }
   return "link";
 }
 
@@ -294,7 +311,7 @@ export async function getLessonDetailForViewer(
 
   const { data: materialRows } = await supabase
     .from("materials")
-    .select("id, lesson_id, title, name, file_type, type, file_url, link_url, download_url")
+    .select("*")
     .eq("lesson_id", lessonId)
     .returns<MaterialRow[]>();
 
@@ -304,9 +321,13 @@ export async function getLessonDetailForViewer(
     const hasVideo = Boolean(lessonRow.feedback_video_url || lessonRow.video_url);
     const materials: Material[] = (materialRows ?? []).map((item, index) => ({
       id: item.id || `m-${index + 1}`,
-      name: item.title ?? item.name ?? "자료",
-      type: mapMaterialType(item.file_type ?? item.type),
-      href: item.download_url ?? item.file_url ?? item.link_url ?? "#",
+      title: item.title ?? item.name ?? "자료",
+      fileUrl: item.file_url ?? item.link_url ?? item.download_url ?? "#",
+      materialType: mapDbToMaterialType(
+        item.material_type,
+        item.file_type,
+        item.type,
+      ),
     }));
 
     mappedLesson = {
