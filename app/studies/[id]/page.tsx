@@ -114,54 +114,51 @@ export default async function StudyDetailPage({ params }: Props) {
             <p className="mt-2 text-sm leading-6 text-[#6B7684]">{detail.study.notice}</p>
           </article>
 
-          {lessons.map((lesson) => (
-            <article
-              key={lesson.id}
-              className={`rounded-[22px] border bg-white p-5 shadow-[0_10px_22px_rgba(25,31,40,0.035)] ${
-                lesson.hasVideo ? "border-[#B8D8FF]" : "border-[#E5E8EB]"
-              }`}
-            >
-              <div className="mb-3 flex flex-wrap gap-2">
-                <StatusBadge tone={lesson.hasVideo ? "blue" : "gray"}>
-                  {lesson.order}회차
-                </StatusBadge>
-                {lesson.hasVideo ? <StatusBadge tone="green">새 영상</StatusBadge> : null}
-                <StatusBadge tone={lesson.isPublished ? "blue" : "gray"}>
-                  {lesson.isPublished ? "공개중" : "준비중"}
-                </StatusBadge>
-                {lesson.materialCount > 0 ? (
-                  <StatusBadge tone="yellow">자료 있음</StatusBadge>
-                ) : null}
-              </div>
-              <h3 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">
-                {lesson.title}
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-[#6B7684]">
-                {lesson.hasVideo
-                  ? `피드백 영상 있음 · 자료 ${lesson.materialCount}개`
-                  : "아직 피드백 영상이 준비되지 않았어요."}
-              </p>
-              <div className="mt-3 space-y-1 text-sm font-semibold text-[#6B7684]">
-                <p>피드백 영상 상태: {lesson.hasVideo ? "있음" : "준비중"}</p>
-                <p>자료 개수: {lesson.materialCount}개</p>
-                <p>공개 여부: {lesson.isPublished ? "공개중" : "준비중"}</p>
-              </div>
-              <div className="mt-4">
-                {lesson.hasVideo || lesson.isPublished ? (
+          {lessons.length === 0 ? (
+            <p className="rounded-[22px] bg-[#F7F8FA] px-5 py-6 text-center text-sm font-semibold text-[#6B7684]">
+              아직 등록된 회차가 없어요.
+            </p>
+          ) : (
+            lessons.map((lesson) => (
+              <article
+                key={lesson.id}
+                className={`rounded-[22px] border bg-white p-5 shadow-[0_10px_22px_rgba(25,31,40,0.035)] ${
+                  lesson.hasVideo ? "border-[#B8D8FF]" : "border-[#E5E8EB]"
+                }`}
+              >
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <StatusBadge tone={lesson.hasVideo ? "blue" : "gray"}>
+                    {lesson.order}회차
+                  </StatusBadge>
+                  {lesson.hasVideo ? <StatusBadge tone="green">새 영상</StatusBadge> : null}
+                  <StatusBadge tone={lesson.isPublished ? "blue" : "gray"}>
+                    {lesson.isPublished ? "공개중" : "준비중"}
+                  </StatusBadge>
+                  {lesson.materialCount > 0 ? (
+                    <StatusBadge tone="yellow">자료 {lesson.materialCount}개</StatusBadge>
+                  ) : null}
+                </div>
+                <h3 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">
+                  {lesson.title}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-[#6B7684]">
+                  {lesson.hasVideo
+                    ? `피드백 영상 있음 · 자료 ${lesson.materialCount}개`
+                    : lesson.materialCount > 0
+                      ? `자료 ${lesson.materialCount}개`
+                      : "아직 등록된 자료가 없어요."}
+                </p>
+                <div className="mt-4">
                   <Link
                     href={`/studies/${study.id}/lessons/${lesson.id}`}
                     className="inline-flex h-10 items-center rounded-2xl bg-[#3182F6] px-4 text-sm font-extrabold text-white"
                   >
                     회차 보기
                   </Link>
-                ) : (
-                  <span className="inline-flex h-10 items-center rounded-2xl bg-[#F2F4F6] px-4 text-sm font-extrabold text-[#191F28]">
-                    준비중
-                  </span>
-                )}
-              </div>
-            </article>
-          ))}
+                </div>
+              </article>
+            ))
+          )}
         </section>
       </div>
     </div>

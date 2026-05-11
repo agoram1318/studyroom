@@ -20,7 +20,8 @@ type LessonRow = {
   title: string;
   summary: string | null;
   lesson_order: number | null;
-  status: "draft" | "open" | "ready" | "closed" | null;
+  /** status 컬럼은 SQL 마이그레이션 전에는 DB에 없을 수 있으므로 optional */
+  status?: "draft" | "open" | "ready" | "closed" | null;
   is_published: boolean | null;
   video_url: string | null;
   feedback_video_url: string | null;
@@ -95,10 +96,13 @@ function mapStudyStatus(value: StudyRow["status"]): Study["status"] {
   return "scheduled";
 }
 
-function mapLessonStatus(value: LessonRow["status"], hasVideo: boolean): Lesson["status"] {
+function mapLessonStatus(
+  value: LessonRow["status"] | undefined,
+  hasVideo: boolean,
+): Lesson["status"] {
   if (hasVideo || value === "closed") return "uploaded";
   if (value === "ready" || value === "open") return "ready";
-  return "soon"; // draft, null, 또는 DB에 status 컬럼이 없는 경우
+  return "soon"; // draft, null, undefined (status 컬럼 없는 경우 포함)
 }
 
 function mapDbToMaterialType(
@@ -272,14 +276,29 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
 
   const studyMaterials: Material[] = (studyMatRows ?? []).map(mapMaterialRow);
 
-  const { data: lessonRows } = await supabase
+  const LESSON_FIELDS_WITH_STATUS =
+    "id, study_id, title, summary, lesson_order, status, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date";
+  const LESSON_FIELDS_NO_STATUS =
+    "id, study_id, title, summary, lesson_order, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date";
+
+  const { data: lessonRowsRaw, error: lessonQueryError } = await supabase
     .from("lessons")
-    .select(
-      "id, study_id, title, summary, lesson_order, status, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date",
-    )
+    .select(LESSON_FIELDS_WITH_STATUS)
     .eq("study_id", studyId)
     .order("lesson_order", { ascending: true })
     .returns<LessonRow[]>();
+
+  // status 컬럼이 아직 없는 경우(schema cache 미반영) → status 제외하고 재시도
+  let lessonRows = lessonRowsRaw;
+  if (lessonQueryError?.message?.toLowerCase().includes("status")) {
+    const { data: fallback } = await supabase
+      .from("lessons")
+      .select(LESSON_FIELDS_NO_STATUS)
+      .eq("study_id", studyId)
+      .order("lesson_order", { ascending: true })
+      .returns<LessonRow[]>();
+    lessonRows = fallback;
+  }
 
   const lessonIds = (lessonRows ?? []).map((lesson) => lesson.id);
   const materialCountMap = new Map<string, number>();
@@ -342,14 +361,32 @@ export async function getLessonDetailForViewer(
   const studyDetail = studyDetailResult;
 
   const { supabase } = await getViewer();
-  const { data: lessonRow, error: lessonError } = await supabase
+
+  const LESSON_FIELDS_WITH_STATUS =
+    "id, study_id, title, summary, lesson_order, status, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date";
+  const LESSON_FIELDS_NO_STATUS =
+    "id, study_id, title, summary, lesson_order, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date";
+
+  const { data: lessonRowRaw, error: lessonQueryError } = await supabase
     .from("lessons")
-    .select(
-      "id, study_id, title, summary, lesson_order, status, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date",
-    )
+    .select(LESSON_FIELDS_WITH_STATUS)
     .eq("study_id", studyId)
     .eq("id", lessonId)
     .maybeSingle<LessonRow>();
+
+  // status 컬럼 미존재 시 방어: status 제외하고 재시도
+  let lessonRow: LessonRow | null = lessonRowRaw;
+  let lessonError = lessonQueryError;
+  if (lessonQueryError?.message?.toLowerCase().includes("status")) {
+    const { data: fallback, error: fallbackError } = await supabase
+      .from("lessons")
+      .select(LESSON_FIELDS_NO_STATUS)
+      .eq("study_id", studyId)
+      .eq("id", lessonId)
+      .maybeSingle<LessonRow>();
+    lessonRow = fallback;
+    lessonError = fallbackError;
+  }
 
   const { data: materialRows } = await supabase
     .from("materials")

@@ -23,6 +23,14 @@ function downloadHrefFor(material: Material): string {
 }
 
 export function MaterialList({ materials }: Props) {
+  if (materials.length === 0) {
+    return (
+      <p className="mt-4 rounded-2xl bg-[#F7F8FA] px-4 py-3 text-sm font-semibold text-[#6B7684]">
+        아직 등록된 자료가 없어요.
+      </p>
+    );
+  }
+
   return (
     <div className="mt-4 grid gap-2.5">
       {materials.map((material) => {

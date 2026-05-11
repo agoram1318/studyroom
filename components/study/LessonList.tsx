@@ -9,6 +9,14 @@ type Props = {
 };
 
 export function LessonList({ studyId, lessons, activeLessonId }: Props) {
+  if (lessons.length === 0) {
+    return (
+      <p className="rounded-[18px] bg-[#F7F8FA] px-4 py-5 text-center text-sm font-semibold text-[#6B7684]">
+        아직 등록된 회차가 없어요.
+      </p>
+    );
+  }
+
   return (
     <div className="grid gap-3">
       {lessons.map((lesson) => {
