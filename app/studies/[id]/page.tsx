@@ -42,7 +42,7 @@ export default async function StudyDetailPage({ params }: Props) {
     redirect("/dashboard");
   }
 
-  const { study, lessons } = detail;
+  const { study, lessons, queryError } = detail;
   const progress =
     study.totalLessons === 0
       ? 0
@@ -54,6 +54,19 @@ export default async function StudyDetailPage({ params }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* ── 디버그 패널 (문제 확인 후 제거) ── */}
+      {queryError ? (
+        <div className="rounded-2xl border border-[#FFB3B3] bg-[#FFF0F0] px-4 py-3 text-xs font-mono text-[#C0392B]">
+          <strong>DB 오류:</strong> {queryError}
+        </div>
+      ) : null}
+      {process.env.NODE_ENV === "development" ? (
+        <div className="rounded-2xl border border-[#E5E8EB] bg-[#F7F8FA] px-4 py-3 text-xs font-mono text-[#6B7684]">
+          studyId={id} | lessons={lessons.length} | materials={detail.studyMaterials.length}
+        </div>
+      ) : null}
+      {/* ── /디버그 패널 ── */}
+
       <PageHeader
         title={study.title}
         description={study.subtitle}

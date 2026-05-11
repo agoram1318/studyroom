@@ -1,4 +1,5 @@
 import { studies as mockStudies } from "@/lib/mock-data";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Lesson, Material, Study } from "@/types";
 
@@ -74,6 +75,8 @@ export type StudyDetailData = {
   lessons: LessonPreview[];
   /** 전회차 공통 자료 (lesson_id = null) */
   studyMaterials: Material[];
+  /** 데이터 조회 중 발생한 에러 메시지 (디버깅용) */
+  queryError?: string;
 };
 
 export type LessonDetailData = {
@@ -185,6 +188,88 @@ async function getAllowedStudyIds(userId: string) {
   return new Set((data ?? []).map((item) => item.study_id));
 }
 
+/**
+ * lessons 테이블 조회 헬퍼.
+ * - status 컬럼이 없을 때(schema cache 미반영)를 방어하여 fallback 쿼리를 실행한다.
+ * - RLS 우회를 위해 admin client를 사용한다 (인증 체크는 호출 전에 완료).
+ */
+async function queryLessons(studyId: string): Promise<{ rows: LessonRow[]; error?: string }> {
+  const db = createAdminClient();
+
+  const FIELDS_WITH_STATUS =
+    "id, study_id, title, summary, lesson_order, status, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date";
+  const FIELDS_NO_STATUS =
+    "id, study_id, title, summary, lesson_order, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date";
+
+  const { data, error } = await db
+    .from("lessons")
+    .select(FIELDS_WITH_STATUS)
+    .eq("study_id", studyId)
+    .order("lesson_order", { ascending: true })
+    .returns<LessonRow[]>();
+
+  // status 컬럼 없는 경우(schema cache 미반영) → status 제외 재시도
+  if (error?.message?.toLowerCase().includes("status")) {
+    const { data: fallback, error: fallbackError } = await db
+      .from("lessons")
+      .select(FIELDS_NO_STATUS)
+      .eq("study_id", studyId)
+      .order("lesson_order", { ascending: true })
+      .returns<LessonRow[]>();
+
+    if (fallbackError) {
+      return { rows: [], error: fallbackError.message };
+    }
+    return { rows: fallback ?? [] };
+  }
+
+  if (error) {
+    return { rows: [], error: error.message };
+  }
+  return { rows: data ?? [] };
+}
+
+/**
+ * 단일 lesson 조회 헬퍼 (admin client 사용).
+ */
+async function queryLesson(
+  studyId: string,
+  lessonId: string,
+): Promise<{ row: LessonRow | null; error?: string }> {
+  const db = createAdminClient();
+
+  const FIELDS_WITH_STATUS =
+    "id, study_id, title, summary, lesson_order, status, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date";
+  const FIELDS_NO_STATUS =
+    "id, study_id, title, summary, lesson_order, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date";
+
+  const { data, error } = await db
+    .from("lessons")
+    .select(FIELDS_WITH_STATUS)
+    .eq("study_id", studyId)
+    .eq("id", lessonId)
+    .maybeSingle<LessonRow>();
+
+  if (error?.message?.toLowerCase().includes("status")) {
+    const { data: fallback, error: fallbackError } = await db
+      .from("lessons")
+      .select(FIELDS_NO_STATUS)
+      .eq("study_id", studyId)
+      .eq("id", lessonId)
+      .maybeSingle<LessonRow>();
+
+    if (fallbackError) {
+      return { row: null, error: fallbackError.message };
+    }
+    return { row: fallback };
+  }
+
+  if (error) {
+    return { row: null, error: error.message };
+  }
+  return { row: data };
+}
+
 export async function getDashboardStudies() {
   const { supabase, user, role } = await getViewer();
 
@@ -226,14 +311,14 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
   const { supabase, user, role } = await getViewer();
   if (!user) return null;
 
-  // DB 조회를 먼저 수행 (enrollment 체크 전 — mock ID가 enrollment 체크에서 걸리는 문제 방지)
+  // 1. 스터디 조회 (user client — studies 테이블 RLS 체크)
   const { data: studyRow, error: studyError } = await supabase
     .from("studies")
     .select("id, title, description, status, lesson_count")
     .eq("id", studyId)
     .maybeSingle<StudyRow>();
 
-  // DB가 응답 불가거나 스터디가 없으면 → mock 데이터로 폴백 (enrollment 체크 불필요)
+  // DB에 없는 스터디(또는 오류) → mock 폴백
   if (studyError || !studyRow) {
     const mockStudy = mockStudies.find((item) => item.id === studyId);
     if (!mockStudy) return null;
@@ -260,14 +345,18 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
     };
   }
 
-  // 실제 DB 스터디: admin이 아닌 경우 enrollment 체크
+  // 2. Enrollment 체크 (admin은 모든 스터디 접근 가능)
   if (role !== "admin") {
     const allowedIds = await getAllowedStudyIds(user.id);
     if (!allowedIds.has(studyId)) return UNAUTHORIZED;
   }
 
+  // 3. 이후 데이터 조회는 admin client 사용 (RLS 우회)
+  //    ↳ 인증·권한 체크는 위에서 완료했으므로 안전함
+  const db = createAdminClient();
+
   // 전회차 공통 자료 (lesson_id IS NULL)
-  const { data: studyMatRows } = await supabase
+  const { data: studyMatRows, error: matError } = await db
     .from("materials")
     .select("*")
     .eq("study_id", studyId)
@@ -276,49 +365,29 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
 
   const studyMaterials: Material[] = (studyMatRows ?? []).map(mapMaterialRow);
 
-  const LESSON_FIELDS_WITH_STATUS =
-    "id, study_id, title, summary, lesson_order, status, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date";
-  const LESSON_FIELDS_NO_STATUS =
-    "id, study_id, title, summary, lesson_order, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date";
+  // 회차 목록
+  const { rows: lessonRows, error: lessonQueryError } = await queryLessons(studyId);
 
-  const { data: lessonRowsRaw, error: lessonQueryError } = await supabase
-    .from("lessons")
-    .select(LESSON_FIELDS_WITH_STATUS)
-    .eq("study_id", studyId)
-    .order("lesson_order", { ascending: true })
-    .returns<LessonRow[]>();
-
-  // status 컬럼이 아직 없는 경우(schema cache 미반영) → status 제외하고 재시도
-  let lessonRows = lessonRowsRaw;
-  if (lessonQueryError?.message?.toLowerCase().includes("status")) {
-    const { data: fallback } = await supabase
-      .from("lessons")
-      .select(LESSON_FIELDS_NO_STATUS)
-      .eq("study_id", studyId)
-      .order("lesson_order", { ascending: true })
-      .returns<LessonRow[]>();
-    lessonRows = fallback;
-  }
-
-  const lessonIds = (lessonRows ?? []).map((lesson) => lesson.id);
+  // 각 회차별 자료 개수 집계
+  const lessonIds = lessonRows.map((lesson) => lesson.id);
   const materialCountMap = new Map<string, number>();
 
   if (lessonIds.length > 0) {
-    const { data: materials } = await supabase
+    const { data: matCountRows } = await db
       .from("materials")
       .select("id, lesson_id")
       .in("lesson_id", lessonIds)
       .not("lesson_id", "is", null)
       .returns<Array<Pick<MaterialRow, "id" | "lesson_id">>>();
 
-    for (const material of materials ?? []) {
+    for (const material of matCountRows ?? []) {
       if (!material.lesson_id) continue;
       const current = materialCountMap.get(material.lesson_id) ?? 0;
       materialCountMap.set(material.lesson_id, current + 1);
     }
   }
 
-  const previews: LessonPreview[] = (lessonRows ?? []).map((lesson, index) => {
+  const previews: LessonPreview[] = lessonRows.map((lesson, index) => {
     const hasVideo = Boolean(lesson.feedback_video_url || lesson.video_url);
     return {
       id: lesson.id,
@@ -333,6 +402,11 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
   const completedLessons = previews.filter((lesson) => lesson.hasVideo).length;
   const latestWithVideo = [...previews].reverse().find((item) => item.hasVideo);
 
+  // 에러 메시지 수집 (디버깅용)
+  const errors: string[] = [];
+  if (lessonQueryError) errors.push(`lessons: ${lessonQueryError}`);
+  if (matError) errors.push(`materials: ${matError.message}`);
+
   return {
     study: {
       id: studyRow.id,
@@ -340,14 +414,18 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
       subtitle: studyRow.description ?? "회차별 피드백과 자료를 확인해 보세요.",
       status: mapStudyStatus(studyRow.status),
       completedLessons,
-      totalLessons: studyRow.lesson_count ?? previews.length,
+      // lesson_count 대신 실제 조회된 lessons.length를 사용
+      totalLessons: previews.length,
       latestUpdate: latestWithVideo
         ? `${latestWithVideo.order}회차 피드백 영상 확인 가능`
-        : "첫 회차 준비 중",
+        : previews.length > 0
+          ? `${previews.length}개 회차 등록됨`
+          : "첫 회차 준비 중",
       notice: "회차별 피드백 영상과 자료를 순서대로 확인해 주세요.",
     },
     lessons: previews,
     studyMaterials,
+    queryError: errors.length > 0 ? errors.join(" | ") : undefined,
   };
 }
 
@@ -360,35 +438,11 @@ export async function getLessonDetailForViewer(
   if (studyDetailResult === UNAUTHORIZED) return UNAUTHORIZED;
   const studyDetail = studyDetailResult;
 
-  const { supabase } = await getViewer();
+  // 단일 lesson + 자료 조회 (admin client)
+  const { row: lessonRow, error: lessonQueryError } = await queryLesson(studyId, lessonId);
 
-  const LESSON_FIELDS_WITH_STATUS =
-    "id, study_id, title, summary, lesson_order, status, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date";
-  const LESSON_FIELDS_NO_STATUS =
-    "id, study_id, title, summary, lesson_order, is_published, video_url, feedback_video_url, assignment_title, assignment_note, assignment_due_date";
-
-  const { data: lessonRowRaw, error: lessonQueryError } = await supabase
-    .from("lessons")
-    .select(LESSON_FIELDS_WITH_STATUS)
-    .eq("study_id", studyId)
-    .eq("id", lessonId)
-    .maybeSingle<LessonRow>();
-
-  // status 컬럼 미존재 시 방어: status 제외하고 재시도
-  let lessonRow: LessonRow | null = lessonRowRaw;
-  let lessonError = lessonQueryError;
-  if (lessonQueryError?.message?.toLowerCase().includes("status")) {
-    const { data: fallback, error: fallbackError } = await supabase
-      .from("lessons")
-      .select(LESSON_FIELDS_NO_STATUS)
-      .eq("study_id", studyId)
-      .eq("id", lessonId)
-      .maybeSingle<LessonRow>();
-    lessonRow = fallback;
-    lessonError = fallbackError;
-  }
-
-  const { data: materialRows } = await supabase
+  const db = createAdminClient();
+  const { data: materialRows } = await db
     .from("materials")
     .select("*")
     .eq("lesson_id", lessonId)
@@ -396,7 +450,7 @@ export async function getLessonDetailForViewer(
 
   let mappedLesson: LessonDetailData["lesson"] | null = null;
 
-  if (!lessonError && lessonRow) {
+  if (!lessonQueryError && lessonRow) {
     const hasVideo = Boolean(lessonRow.feedback_video_url || lessonRow.video_url);
     const materials: Material[] = (materialRows ?? []).map(mapMaterialRow);
 
@@ -418,6 +472,7 @@ export async function getLessonDetailForViewer(
       feedbackVideoUrl: lessonRow.feedback_video_url,
     };
   } else {
+    // DB에서 못 찾은 경우 mock 폴백
     const mockStudy = mockStudies.find((item) => item.id === studyId);
     const mockLesson = mockStudy?.lessons.find((item) => item.id === lessonId);
     if (!mockStudy || !mockLesson) return null;
