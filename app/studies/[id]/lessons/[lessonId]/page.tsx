@@ -124,6 +124,17 @@ export default async function LessonDetailPage({ params }: Props) {
         </article>
       </section>
 
+      {/* 전회차 자료 */}
+      {detail.studyMaterials.length > 0 ? (
+        <section className="rounded-[28px] border border-[#E5E8EB] bg-white p-5 shadow-[0_12px_28px_rgba(25,31,40,0.06)] md:p-6">
+          <h2 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">전회차 자료</h2>
+          <p className="mt-1 text-sm text-[#6B7684]">
+            스터디 공통으로 제공되는 전회차 자료입니다.
+          </p>
+          <MaterialList materials={detail.studyMaterials} />
+        </section>
+      ) : null}
+
       <section className="flex flex-wrap gap-2">
         <Link
           href={`/studies/${study.id}`}

@@ -13,6 +13,7 @@ const typeLabel: Record<Material["materialType"], string> = {
   pdf: "PDF",
   image: "이미지",
   link: "링크",
+  other: "기타",
 };
 
 function downloadHrefFor(material: Material): string {
@@ -33,11 +34,16 @@ export function MaterialList({ materials }: Props) {
             key={material.id}
             className="flex flex-col gap-3 rounded-2xl bg-[#F7F8FA] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
           >
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              <span className="truncate text-sm font-bold text-[#191F28]">
-                {material.title}
-              </span>
-              <StatusBadge tone="gray">{typeLabel[material.materialType]}</StatusBadge>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="truncate text-sm font-bold text-[#191F28]">
+                  {material.title}
+                </span>
+                <StatusBadge tone="gray">{typeLabel[material.materialType]}</StatusBadge>
+              </div>
+              {material.description ? (
+                <p className="text-xs leading-5 text-[#6B7684]">{material.description}</p>
+              ) : null}
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
               <a

@@ -8,7 +8,7 @@ export type BadgeTone =
   | "gray";
 
 /** 회차 피드백 자료 (구글 드라이브 등 외부 링크) */
-export type MaterialType = "pdf" | "image" | "link";
+export type MaterialType = "pdf" | "image" | "link" | "other";
 
 export type Material = {
   id: string;
@@ -17,6 +17,8 @@ export type Material = {
   /** 공유 링크 (보기 버튼) */
   fileUrl: string;
   materialType: MaterialType;
+  /** 자료 설명 (선택) */
+  description?: string;
 };
 
 export type Lesson = {

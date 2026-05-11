@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LessonList } from "@/components/study/LessonList";
+import { MaterialList } from "@/components/study/MaterialList";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { UNAUTHORIZED, getStudyDetailForViewer } from "@/lib/study-room";
@@ -66,6 +67,17 @@ export default async function StudyDetailPage({ params }: Props) {
           </>
         }
       />
+
+      {/* 전회차 자료 */}
+      {detail.studyMaterials.length > 0 ? (
+        <section className="rounded-[28px] border border-[#E5E8EB] bg-white p-5 shadow-[0_12px_28px_rgba(25,31,40,0.06)] md:p-6">
+          <h2 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">전회차 자료</h2>
+          <p className="mt-1 text-sm text-[#6B7684]">
+            모든 회차에서 공통으로 제공되는 자료입니다.
+          </p>
+          <MaterialList materials={detail.studyMaterials} />
+        </section>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[330px_1fr] lg:items-start">
         <aside className="rounded-[28px] border border-[#E5E8EB] bg-white p-4 shadow-[0_12px_28px_rgba(25,31,40,0.06)] lg:sticky lg:top-24">

@@ -31,7 +31,8 @@ type LessonRow = {
 
 type MaterialRow = {
   id: string;
-  lesson_id: string;
+  lesson_id: string | null;
+  study_id?: string | null;
   title: string | null;
   name: string | null;
   /** DB 컬럼 material_type (마이그레이션 후 사용) */
@@ -41,6 +42,7 @@ type MaterialRow = {
   file_url: string | null;
   link_url: string | null;
   download_url: string | null;
+  description?: string | null;
 };
 
 type EnrollmentRow = {
@@ -69,6 +71,8 @@ export type StudySummary = {
 export type StudyDetailData = {
   study: StudySummary & { notice: string };
   lessons: LessonPreview[];
+  /** 전회차 공통 자료 (lesson_id = null) */
+  studyMaterials: Material[];
 };
 
 export type LessonDetailData = {
@@ -80,6 +84,8 @@ export type LessonDetailData = {
   };
   prevLessonId: string | null;
   nextLessonId: string | null;
+  /** 전회차 공통 자료 (스터디 레벨) */
+  studyMaterials: Material[];
 };
 
 
@@ -113,7 +119,18 @@ function mapDbToMaterialType(
   ) {
     return "image";
   }
+  if (raw === "other") return "other";
   return "link";
+}
+
+function mapMaterialRow(item: MaterialRow, index: number): Material {
+  return {
+    id: item.id || `m-${index + 1}`,
+    title: item.title ?? item.name ?? "자료",
+    fileUrl: item.file_url ?? item.link_url ?? item.download_url ?? "#",
+    materialType: mapDbToMaterialType(item.material_type, item.file_type, item.type),
+    description: item.description || undefined,
+  };
 }
 
 function formatDateLabel(input: string | null) {
@@ -235,6 +252,7 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
         materialCount: lesson.materials.length,
         isPublished: lesson.status !== "soon",
       })),
+      studyMaterials: [],
     };
   }
 
@@ -243,6 +261,16 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
     const allowedIds = await getAllowedStudyIds(user.id);
     if (!allowedIds.has(studyId)) return UNAUTHORIZED;
   }
+
+  // 전회차 공통 자료 (lesson_id IS NULL)
+  const { data: studyMatRows } = await supabase
+    .from("materials")
+    .select("*")
+    .eq("study_id", studyId)
+    .is("lesson_id", null)
+    .returns<MaterialRow[]>();
+
+  const studyMaterials: Material[] = (studyMatRows ?? []).map(mapMaterialRow);
 
   const { data: lessonRows } = await supabase
     .from("lessons")
@@ -261,9 +289,11 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
       .from("materials")
       .select("id, lesson_id")
       .in("lesson_id", lessonIds)
+      .not("lesson_id", "is", null)
       .returns<Array<Pick<MaterialRow, "id" | "lesson_id">>>();
 
     for (const material of materials ?? []) {
+      if (!material.lesson_id) continue;
       const current = materialCountMap.get(material.lesson_id) ?? 0;
       materialCountMap.set(material.lesson_id, current + 1);
     }
@@ -298,6 +328,7 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
       notice: "회차별 피드백 영상과 자료를 순서대로 확인해 주세요.",
     },
     lessons: previews,
+    studyMaterials,
   };
 }
 
@@ -330,16 +361,7 @@ export async function getLessonDetailForViewer(
 
   if (!lessonError && lessonRow) {
     const hasVideo = Boolean(lessonRow.feedback_video_url || lessonRow.video_url);
-    const materials: Material[] = (materialRows ?? []).map((item, index) => ({
-      id: item.id || `m-${index + 1}`,
-      title: item.title ?? item.name ?? "자료",
-      fileUrl: item.file_url ?? item.link_url ?? item.download_url ?? "#",
-      materialType: mapDbToMaterialType(
-        item.material_type,
-        item.file_type,
-        item.type,
-      ),
-    }));
+    const materials: Material[] = (materialRows ?? []).map(mapMaterialRow);
 
     mappedLesson = {
       id: lessonRow.id,
@@ -383,5 +405,6 @@ export async function getLessonDetailForViewer(
     lesson: mappedLesson,
     prevLessonId,
     nextLessonId,
+    studyMaterials: studyDetail.studyMaterials,
   };
 }
