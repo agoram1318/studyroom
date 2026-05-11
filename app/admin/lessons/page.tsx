@@ -34,10 +34,20 @@ type MaterialForm = {
   file_url: string;
 };
 
+type LessonForm = {
+  title: string;
+  lesson_order: number;
+};
+
 const EMPTY_FORM: MaterialForm = {
   title: "",
   material_type: "pdf",
   file_url: "",
+};
+
+const EMPTY_LESSON_FORM: LessonForm = {
+  title: "",
+  lesson_order: 1,
 };
 
 const TYPE_LABELS: Record<MaterialType, string> = {
@@ -132,6 +142,8 @@ export default function AdminLessonsPage() {
   const [addForm, setAddForm] = useState<MaterialForm>(EMPTY_FORM);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<MaterialForm>(EMPTY_FORM);
+  const [showLessonForm, setShowLessonForm] = useState(false);
+  const [lessonForm, setLessonForm] = useState<LessonForm>(EMPTY_LESSON_FORM);
   const [isLoadingStudies, setIsLoadingStudies] = useState(true);
   const [isLoadingLessons, setIsLoadingLessons] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -284,6 +296,59 @@ export default function AdminLessonsPage() {
     await loadLessonsAndMaterials(selectedStudyId);
   };
 
+  const handleAddLesson = async () => {
+    if (!lessonForm.title.trim()) {
+      setError("회차 제목을 입력해 주세요.");
+      return;
+    }
+    setError("");
+    setMessage("");
+    setIsSubmitting(true);
+
+    const supabase = createClient();
+    const { error: insertError } = await supabase.from("lessons").insert({
+      study_id: selectedStudyId,
+      title: lessonForm.title.trim(),
+      lesson_order: lessonForm.lesson_order,
+      status: "draft",
+    });
+
+    if (insertError) {
+      setError(insertError.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    setMessage(`${lessonForm.lesson_order}회차를 추가했습니다.`);
+    setShowLessonForm(false);
+    setLessonForm(EMPTY_LESSON_FORM);
+    await loadLessonsAndMaterials(selectedStudyId);
+    setIsSubmitting(false);
+  };
+
+  const handleDeleteLesson = async (lessonId: string, order: number | null) => {
+    if (!window.confirm(`${order ?? "?"}회차를 삭제할까요? 해당 회차의 자료도 모두 삭제됩니다.`))
+      return;
+    setError("");
+    setMessage("");
+
+    const supabase = createClient();
+    // 자료 먼저 삭제
+    await supabase.from("materials").delete().eq("lesson_id", lessonId);
+    const { error: deleteError } = await supabase
+      .from("lessons")
+      .delete()
+      .eq("id", lessonId);
+
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+
+    setMessage("회차를 삭제했습니다.");
+    await loadLessonsAndMaterials(selectedStudyId);
+  };
+
   const startEditMaterial = (m: MaterialRow) => {
     setEditingMaterialId(m.id);
     setEditForm({
@@ -327,6 +392,7 @@ export default function AdminLessonsPage() {
               setSelectedStudyId(e.target.value);
               setAddFormLessonId(null);
               setEditingMaterialId(null);
+              setShowLessonForm(false);
               setError("");
               setMessage("");
             }}
@@ -357,7 +423,69 @@ export default function AdminLessonsPage() {
       {/* 회차 목록 */}
       {selectedStudyId ? (
         <section className="space-y-3">
-          <h2 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">회차별 자료</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">회차별 자료</h2>
+            <Button
+              variant="primary"
+              className="h-9 px-4 text-xs"
+              onClick={() => {
+                setShowLessonForm((prev) => !prev);
+                setLessonForm({
+                  title: "",
+                  lesson_order: lessons.length + 1,
+                });
+                setError("");
+              }}
+            >
+              {showLessonForm ? "취소" : "+ 회차 추가"}
+            </Button>
+          </div>
+
+          {/* 회차 추가 폼 */}
+          {showLessonForm ? (
+            <div className="rounded-2xl border border-[#D7E6FB] bg-[#F0F7FF] p-4">
+              <p className="mb-3 text-sm font-extrabold text-[#2E6FD1]">새 회차 추가</p>
+              <div className="grid gap-2.5 sm:grid-cols-[80px_1fr]">
+                <input
+                  type="number"
+                  min={1}
+                  value={lessonForm.lesson_order}
+                  onChange={(e) =>
+                    setLessonForm((prev) => ({
+                      ...prev,
+                      lesson_order: Number(e.target.value) || 1,
+                    }))
+                  }
+                  placeholder="순서"
+                  className="h-10 rounded-xl border border-[#E5E8EB] bg-white px-3 text-sm font-semibold outline-none focus:border-[#3182F6]"
+                />
+                <input
+                  value={lessonForm.title}
+                  onChange={(e) =>
+                    setLessonForm((prev) => ({ ...prev, title: e.target.value }))
+                  }
+                  placeholder="회차 제목 (예: 오리엔테이션)"
+                  className="h-10 rounded-xl border border-[#E5E8EB] bg-white px-3 text-sm font-semibold outline-none focus:border-[#3182F6]"
+                />
+              </div>
+              <div className="mt-3 flex gap-2">
+                <Button
+                  onClick={() => void handleAddLesson()}
+                  disabled={isSubmitting}
+                  className="h-9 px-4 text-xs"
+                >
+                  {isSubmitting ? "저장 중..." : "회차 추가"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowLessonForm(false)}
+                  className="h-9 px-4 text-xs"
+                >
+                  취소
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           {isLoadingLessons ? (
             <p className="rounded-2xl bg-[#F7F8FA] px-4 py-3 text-sm font-semibold text-[#6B7684]">
@@ -365,7 +493,7 @@ export default function AdminLessonsPage() {
             </p>
           ) : lessons.length === 0 ? (
             <p className="rounded-2xl bg-[#F7F8FA] px-4 py-3 text-sm font-semibold text-[#6B7684]">
-              이 스터디에 등록된 회차가 없어요.
+              아직 등록된 회차가 없어요. 위 버튼으로 회차를 추가해 주세요.
             </p>
           ) : (
             lessons.map((lesson) => {
@@ -385,22 +513,32 @@ export default function AdminLessonsPage() {
                         {lesson.title}
                       </h3>
                     </div>
-                    <Button
-                      variant="secondary"
-                      className="h-9 px-3 text-xs"
-                      onClick={() => {
-                        if (addFormLessonId === lesson.id) {
-                          setAddFormLessonId(null);
-                        } else {
-                          setAddFormLessonId(lesson.id);
-                          setAddForm(EMPTY_FORM);
-                          setEditingMaterialId(null);
-                          setError("");
+                    <div className="flex gap-2">
+                      <Button
+                        variant="secondary"
+                        className="h-9 px-3 text-xs"
+                        onClick={() => {
+                          if (addFormLessonId === lesson.id) {
+                            setAddFormLessonId(null);
+                          } else {
+                            setAddFormLessonId(lesson.id);
+                            setAddForm(EMPTY_FORM);
+                            setEditingMaterialId(null);
+                            setError("");
+                          }
+                        }}
+                      >
+                        {addFormLessonId === lesson.id ? "취소" : "+ 자료 추가"}
+                      </Button>
+                      <button
+                        onClick={() =>
+                          void handleDeleteLesson(lesson.id, lesson.lesson_order)
                         }
-                      }}
-                    >
-                      {addFormLessonId === lesson.id ? "취소" : "+ 자료 추가"}
-                    </Button>
+                        className="h-9 rounded-xl bg-[#FFF5F5] px-3 text-xs font-extrabold text-[#F04452] hover:bg-[#FFE8E8]"
+                      >
+                        회차 삭제
+                      </button>
+                    </div>
                   </div>
 
                   {/* 자료 없음 안내 */}
