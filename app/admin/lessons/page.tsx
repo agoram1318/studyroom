@@ -16,7 +16,6 @@ type AdminLesson = {
   study_id: string;
   title: string;
   lesson_order: number | null;
-  feedback_video_url: string | null;
   summary: string | null;
 };
 
@@ -42,14 +41,13 @@ type MatForm = {
 type LessonForm = {
   title: string;
   lesson_order: number;
-  feedback_video_url: string;
   summary: string;
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const EMPTY_MAT: MatForm = { title: "", material_type: "pdf", file_url: "", description: "" };
-const EMPTY_LESSON: LessonForm = { title: "", lesson_order: 1, feedback_video_url: "", summary: "" };
+const EMPTY_LESSON: LessonForm = { title: "", lesson_order: 1, summary: "" };
 const MAT_LABELS: Record<MatType, string> = { pdf: "PDF", image: "이미지", link: "링크", other: "기타" };
 
 function isValidMatType(v: string | null | undefined): v is MatType {
@@ -67,7 +65,6 @@ function lessonToForm(l: AdminLesson): LessonForm {
   return {
     title: l.title,
     lesson_order: l.lesson_order ?? 1,
-    feedback_video_url: l.feedback_video_url ?? "",
     summary: l.summary ?? "",
   };
 }
@@ -279,7 +276,7 @@ export default function AdminLessonsPage() {
     // 회차 목록
     const { data: lData, error: lErr } = await supabase
       .from("lessons")
-      .select("id, study_id, title, lesson_order, feedback_video_url, summary")
+      .select("id, study_id, title, lesson_order, summary")
       .eq("study_id", studyId)
       .order("lesson_order", { ascending: true })
       .returns<AdminLesson[]>();
@@ -382,22 +379,12 @@ export default function AdminLessonsPage() {
       return;
     }
     setError(""); setMessage(""); setIsSubmitting(true);
-    const basePayload = {
+    const { error: e } = await createClient().from("lessons").insert({
       study_id: selectedStudyId,
       title: lessonForm.title.trim(),
       lesson_order: lessonForm.lesson_order,
-      feedback_video_url: lessonForm.feedback_video_url.trim() || null,
       summary: lessonForm.summary.trim() || null,
-    };
-    let { error: e } = await createClient().from("lessons").insert({
-      ...basePayload,
-      status: "draft",
     });
-    // status 컬럼이 아직 DB에 없는 경우 방어: status 없이 재시도
-    if (e && /status/i.test(e.message)) {
-      const { error: e2 } = await createClient().from("lessons").insert(basePayload);
-      e = e2 ?? null;
-    }
     if (e) { setError(e.message); setIsSubmitting(false); return; }
     setMessage(`${lessonForm.lesson_order}회차를 추가했습니다.`);
     setShowLessonForm(false);
@@ -416,7 +403,6 @@ export default function AdminLessonsPage() {
       .update({
         title: lessonEditForm.title.trim(),
         lesson_order: lessonEditForm.lesson_order,
-        feedback_video_url: lessonEditForm.feedback_video_url.trim() || null,
         summary: lessonEditForm.summary.trim() || null,
       })
       .eq("id", id);
@@ -507,7 +493,7 @@ export default function AdminLessonsPage() {
     return (
       <div className="rounded-2xl border border-[#D7E6FB] bg-[#F0F7FF] p-4">
         <div className="grid gap-2.5 sm:grid-cols-2">
-          <div className="flex gap-2">
+          <div className="flex gap-2 sm:col-span-2">
             <input
               type="number"
               min={1}
@@ -523,16 +509,10 @@ export default function AdminLessonsPage() {
               className="h-10 min-w-0 flex-1 rounded-xl border border-[#E5E8EB] bg-white px-3 text-sm font-semibold outline-none focus:border-[#3182F6]"
             />
           </div>
-          <input
-            value={form.feedback_video_url}
-            onChange={(e) => onChange({ ...form, feedback_video_url: e.target.value })}
-            placeholder="피드백 영상 링크 (선택)"
-            className="h-10 rounded-xl border border-[#E5E8EB] bg-white px-3 text-sm font-semibold outline-none focus:border-[#3182F6]"
-          />
           <textarea
             value={form.summary}
             onChange={(e) => onChange({ ...form, summary: e.target.value })}
-            placeholder="설명 / 안내사항 (선택)"
+            placeholder="안내사항 (선택)"
             rows={2}
             className="rounded-xl border border-[#E5E8EB] bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-[#3182F6] sm:col-span-2"
           />
@@ -716,7 +696,6 @@ export default function AdminLessonsPage() {
             {/* 회차 카드 목록 */}
             {lessons.map((lesson) => {
               const lMats = lessonMatMap[lesson.id] ?? [];
-              const hasVideo = Boolean(lesson.feedback_video_url);
               const isEditingThis = editingLessonId === lesson.id;
 
               return (
@@ -741,10 +720,9 @@ export default function AdminLessonsPage() {
                           <span className="text-base font-black tracking-[-0.03em] text-[#191F28]">
                             {lesson.title}
                           </span>
-                          <StatusBadge tone={hasVideo ? "green" : "gray"}>
-                            피드백 영상 {hasVideo ? "등록됨" : "미등록"}
+                          <StatusBadge tone={lMats.length > 0 ? "yellow" : "gray"}>
+                            자료 {lMats.length}개
                           </StatusBadge>
-                          <StatusBadge tone="gray">자료 {lMats.length}개</StatusBadge>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <button
@@ -782,34 +760,10 @@ export default function AdminLessonsPage() {
                         </div>
                       </div>
 
-                      {/* 피드백 요약 카드 */}
-                      <div className="mt-3 grid gap-2 rounded-xl bg-[#F7F8FA] px-4 py-3">
-                        <div className="flex items-start gap-2">
-                          <span className="w-20 shrink-0 text-xs font-bold text-[#6B7684]">피드백 영상</span>
-                          {lesson.feedback_video_url ? (
-                            <a
-                              href={lesson.feedback_video_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="min-w-0 truncate font-mono text-xs text-[#3182F6] hover:underline"
-                            >
-                              {lesson.feedback_video_url}
-                            </a>
-                          ) : (
-                            <span className="text-xs text-[#ADB5BD]">미등록</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-20 shrink-0 text-xs font-bold text-[#6B7684]">피드백 자료</span>
-                          <span className="text-xs text-[#4E5968]">{lMats.length}개</span>
-                        </div>
-                        {lesson.summary ? (
-                          <div className="flex items-start gap-2">
-                            <span className="w-20 shrink-0 text-xs font-bold text-[#6B7684]">안내사항</span>
-                            <span className="line-clamp-2 text-xs text-[#4E5968]">{lesson.summary}</span>
-                          </div>
-                        ) : null}
-                      </div>
+                      {/* 안내사항 요약 */}
+                      {lesson.summary ? (
+                        <p className="mt-2 text-sm text-[#6B7684]">{lesson.summary}</p>
+                      ) : null}
                     </>
                   )}
 

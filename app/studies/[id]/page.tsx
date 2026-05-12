@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { LessonList } from "@/components/study/LessonList";
 import { MaterialList } from "@/components/study/MaterialList";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -50,22 +49,20 @@ export default async function StudyDetailPage({ params }: Props) {
   const statusLabel =
     study.status === "ongoing" ? "진행중" : study.status === "scheduled" ? "예정" : "종료";
   const statusTone =
-    study.status === "ongoing" ? ("green" as const) : study.status === "scheduled" ? ("yellow" as const) : ("gray" as const);
+    study.status === "ongoing"
+      ? ("green" as const)
+      : study.status === "scheduled"
+        ? ("yellow" as const)
+        : ("gray" as const);
 
   return (
     <div className="space-y-6">
-      {/* ── 디버그 패널 (문제 확인 후 제거) ── */}
+      {/* DB 오류 표시 */}
       {queryError ? (
         <div className="rounded-2xl border border-[#FFB3B3] bg-[#FFF0F0] px-4 py-3 text-xs font-mono text-[#C0392B]">
           <strong>DB 오류:</strong> {queryError}
         </div>
       ) : null}
-      {process.env.NODE_ENV === "development" ? (
-        <div className="rounded-2xl border border-[#E5E8EB] bg-[#F7F8FA] px-4 py-3 text-xs font-mono text-[#6B7684]">
-          studyId={id} | lessons={lessons.length} | materials={detail.studyMaterials.length}
-        </div>
-      ) : null}
-      {/* ── /디버그 패널 ── */}
 
       <PageHeader
         title={study.title}
@@ -74,14 +71,14 @@ export default async function StudyDetailPage({ params }: Props) {
           <>
             <StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
             <StatusBadge tone="blue">
-              {study.completedLessons}/{study.totalLessons}회차
+              {study.totalLessons}회차
             </StatusBadge>
             <StatusBadge tone="gray">진행률 {progress}%</StatusBadge>
           </>
         }
       />
 
-      {/* 전회차 자료 */}
+      {/* ── 전회차 자료 ── */}
       {detail.studyMaterials.length > 0 ? (
         <section className="rounded-[28px] border border-[#E5E8EB] bg-white p-5 shadow-[0_12px_28px_rgba(25,31,40,0.06)] md:p-6">
           <h2 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">전회차 자료</h2>
@@ -92,76 +89,55 @@ export default async function StudyDetailPage({ params }: Props) {
         </section>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[330px_1fr] lg:items-start">
-        <aside className="rounded-[28px] border border-[#E5E8EB] bg-white p-4 shadow-[0_12px_28px_rgba(25,31,40,0.06)] lg:sticky lg:top-24">
-          <h2 className="mb-3 text-lg font-black tracking-[-0.03em] text-[#191F28]">
-            회차 목록
-          </h2>
-          <LessonList
-            studyId={study.id}
-            lessons={lessons.map((lesson) => ({
-              id: lesson.id,
-              order: lesson.order,
-              title: lesson.title,
-              summary: `피드백 영상 ${lesson.hasVideo ? "등록됨" : "미등록"} · 자료 ${lesson.materialCount}개`,
-              status: lesson.hasVideo ? "uploaded" : "soon",
-              hasNewVideo: lesson.hasVideo,
-              materials: [],
-              assignment: {
-                title: null,
-                dueDate: "미정",
-                submitStatus: "pending",
-              },
-            }))}
-          />
-        </aside>
+      {/* ── 회차별 피드백 자료 ── */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">
+          회차별 피드백 자료
+        </h2>
 
-        <section className="space-y-3">
-          <article className="rounded-[22px] bg-[#E8F3FF] p-5">
-            <StatusBadge tone="blue">공지</StatusBadge>
-            <h3 className="mt-3 text-lg font-black tracking-[-0.03em] text-[#191F28]">
-              {study.latestUpdate}
-            </h3>
-            <p className="mt-2 text-sm leading-6 text-[#6B7684]">{detail.study.notice}</p>
-          </article>
-
-          {lessons.length === 0 ? (
-            <p className="rounded-[22px] bg-[#F7F8FA] px-5 py-6 text-center text-sm font-semibold text-[#6B7684]">
-              아직 등록된 회차가 없어요.
-            </p>
-          ) : (
-            lessons.map((lesson) => (
+        {lessons.length === 0 ? (
+          <p className="rounded-[22px] bg-[#F7F8FA] px-5 py-6 text-center text-sm font-semibold text-[#6B7684]">
+            아직 등록된 회차가 없어요.
+          </p>
+        ) : (
+          lessons.map((lesson) => {
+            const mats = detail.lessonMaterials[lesson.id] ?? [];
+            return (
               <article
                 key={lesson.id}
-                className={`rounded-[22px] border bg-white p-5 shadow-[0_10px_22px_rgba(25,31,40,0.035)] ${
-                  lesson.hasVideo ? "border-[#B8D8FF]" : "border-[#E5E8EB]"
-                }`}
+                className="rounded-[28px] border border-[#E5E8EB] bg-white p-5 shadow-[0_12px_28px_rgba(25,31,40,0.06)] md:p-6"
               >
-                <div className="mb-3 flex flex-wrap gap-2">
+                {/* 회차 헤더 */}
+                <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge tone="blue">{lesson.order}회차</StatusBadge>
-                  <StatusBadge tone={lesson.hasVideo ? "green" : "gray"}>
-                    피드백 영상 {lesson.hasVideo ? "등록됨" : "미등록"}
-                  </StatusBadge>
-                  <StatusBadge tone={lesson.materialCount > 0 ? "yellow" : "gray"}>
-                    자료 {lesson.materialCount}개
+                  <StatusBadge tone={mats.length > 0 ? "yellow" : "gray"}>
+                    자료 {mats.length}개
                   </StatusBadge>
                 </div>
-                <h3 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">
+
+                <h3 className="mt-3 text-lg font-black tracking-[-0.03em] text-[#191F28]">
                   {lesson.title}
                 </h3>
+
+                {lesson.summary ? (
+                  <p className="mt-1 text-sm leading-6 text-[#6B7684]">{lesson.summary}</p>
+                ) : null}
+
+                {/* 피드백 자료 목록 */}
                 <div className="mt-4">
-                  <Link
-                    href={`/studies/${study.id}/lessons/${lesson.id}`}
-                    className="inline-flex h-10 items-center rounded-2xl bg-[#3182F6] px-4 text-sm font-extrabold text-white"
-                  >
-                    회차 보기
-                  </Link>
+                  {mats.length > 0 ? (
+                    <MaterialList materials={mats} />
+                  ) : (
+                    <p className="rounded-2xl bg-[#F7F8FA] px-4 py-3 text-sm font-semibold text-[#6B7684]">
+                      아직 등록된 피드백 자료가 없어요.
+                    </p>
+                  )}
                 </div>
               </article>
-            ))
-          )}
-        </section>
-      </div>
+            );
+          })
+        )}
+      </section>
     </div>
   );
 }

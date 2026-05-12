@@ -60,6 +60,7 @@ export type LessonPreview = {
   id: string;
   order: number;
   title: string;
+  summary: string | null;
   hasVideo: boolean;
   materialCount: number;
   isPublished: boolean;
@@ -80,6 +81,8 @@ export type StudyDetailData = {
   lessons: LessonPreview[];
   /** 전회차 공통 자료 (lesson_id = null) */
   studyMaterials: Material[];
+  /** 회차별 자료 맵 (lesson.id → Material[]) */
+  lessonMaterials: Record<string, Material[]>;
   /** 데이터 조회 중 발생한 에러 메시지 */
   queryError?: string;
 };
@@ -288,11 +291,13 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
         id: lesson.id,
         order: lesson.order,
         title: lesson.title,
+        summary: null,
         hasVideo: lesson.status === "uploaded",
         materialCount: lesson.materials.length,
         isPublished: lesson.status !== "soon",
       })),
       studyMaterials: [],
+      lessonMaterials: {},
     };
   }
 
@@ -318,22 +323,25 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
   // 회차 목록 (lesson_order 오름차순, is_published/status 무관하게 모두 조회)
   const { rows: lessonRows, error: lessonQueryError } = await queryLessons(studyId);
 
-  // 각 회차별 자료 개수 집계
+  // 각 회차별 자료 개수 집계 + 자료 데이터 수집
   const lessonIds = lessonRows.map((lesson) => lesson.id);
   const materialCountMap = new Map<string, number>();
+  const lessonMaterialsMap: Record<string, Material[]> = {};
 
   if (lessonIds.length > 0) {
-    const { data: matCountRows } = await db
+    const { data: lessonMatRows } = await db
       .from("materials")
-      .select("id, lesson_id")
+      .select(MATERIAL_FIELDS)
       .in("lesson_id", lessonIds)
       .not("lesson_id", "is", null)
-      .returns<Array<{ id: string; lesson_id: string | null }>>();
+      .returns<MaterialRow[]>();
 
-    for (const material of matCountRows ?? []) {
-      if (!material.lesson_id) continue;
-      const current = materialCountMap.get(material.lesson_id) ?? 0;
-      materialCountMap.set(material.lesson_id, current + 1);
+    for (const [idx, row] of (lessonMatRows ?? []).entries()) {
+      if (!row.lesson_id) continue;
+      const current = materialCountMap.get(row.lesson_id) ?? 0;
+      materialCountMap.set(row.lesson_id, current + 1);
+      if (!lessonMaterialsMap[row.lesson_id]) lessonMaterialsMap[row.lesson_id] = [];
+      lessonMaterialsMap[row.lesson_id].push(mapMaterialRow(row, idx));
     }
   }
 
@@ -343,6 +351,7 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
       id: lesson.id,
       order: lesson.lesson_order ?? index + 1,
       title: lesson.title,
+      summary: lesson.summary,
       hasVideo,
       materialCount: materialCountMap.get(lesson.id) ?? 0,
       isPublished: lesson.is_published ?? false,
@@ -373,6 +382,7 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
     },
     lessons: previews,
     studyMaterials,
+    lessonMaterials: lessonMaterialsMap,
     queryError: errors.length > 0 ? errors.join(" | ") : undefined,
   };
 }

@@ -42,8 +42,6 @@ export default async function LessonDetailPage({ params }: Props) {
   }
 
   const { study, lesson, prevLessonId, nextLessonId } = detail;
-  // feedback_video_url 우선, 없으면 video_url — 둘 다 실제 영상 링크 전용
-  const videoUrl = lesson.feedbackVideoUrl || lesson.videoUrl;
 
   return (
     <div className="space-y-6">
@@ -53,9 +51,6 @@ export default async function LessonDetailPage({ params }: Props) {
         badges={
           <>
             <StatusBadge tone="blue">{lesson.order}회차</StatusBadge>
-            <StatusBadge tone={videoUrl ? "green" : "gray"}>
-              피드백 영상 {videoUrl ? "등록됨" : "미등록"}
-            </StatusBadge>
             <StatusBadge tone={lesson.materials.length > 0 ? "yellow" : "gray"}>
               자료 {lesson.materials.length}개
             </StatusBadge>
@@ -63,39 +58,11 @@ export default async function LessonDetailPage({ params }: Props) {
         }
       />
 
-      {/* ── 피드백 영상 ── */}
-      <section className="rounded-[28px] border border-[#E5E8EB] bg-white p-5 shadow-[0_12px_28px_rgba(25,31,40,0.06)] md:p-6">
-        <h2 className="mb-4 text-lg font-black tracking-[-0.03em] text-[#191F28]">피드백 영상</h2>
-        {videoUrl ? (
-          <div className="grid gap-3">
-            <div className="grid aspect-video place-items-center rounded-3xl bg-gradient-to-br from-[#191F28] to-[#3A4658] text-white">
-              <div className="grid h-[76px] w-[76px] place-items-center rounded-full border border-white/20 bg-white/15 text-2xl backdrop-blur-xl">
-                ▶
-              </div>
-            </div>
-            <a
-              href={videoUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-11 w-fit items-center justify-center rounded-2xl bg-[#3182F6] px-4 text-sm font-extrabold text-white"
-            >
-              피드백 영상 보기
-            </a>
-          </div>
-        ) : (
-          <p className="rounded-2xl bg-[#F7F8FA] px-4 py-3 text-sm font-semibold text-[#6B7684]">
-            아직 등록된 피드백 영상이 없어요.
-          </p>
-        )}
-      </section>
-
       {/* ── 피드백 자료 + 안내사항 ── */}
       <section className="grid gap-4 md:grid-cols-2">
         <article className="rounded-[22px] border border-[#E5E8EB] bg-white p-5 shadow-[0_10px_22px_rgba(25,31,40,0.035)]">
           <h3 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">피드백 자료</h3>
-          <p className="mt-1 text-sm text-[#6B7684]">
-            PDF, 이미지, 링크 등 회차별 자료입니다.
-          </p>
+          <p className="mt-1 text-sm text-[#6B7684]">PDF, 이미지, 링크 등 회차별 자료입니다.</p>
           {lesson.materials.length > 0 ? (
             <MaterialList materials={lesson.materials} />
           ) : (
