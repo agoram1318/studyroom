@@ -741,9 +741,9 @@ export default function AdminLessonsPage() {
                           <span className="text-base font-black tracking-[-0.03em] text-[#191F28]">
                             {lesson.title}
                           </span>
-                          {hasVideo ? (
-                            <StatusBadge tone="green">영상 있음</StatusBadge>
-                          ) : null}
+                          <StatusBadge tone={hasVideo ? "green" : "gray"}>
+                            피드백 영상 {hasVideo ? "등록됨" : "미등록"}
+                          </StatusBadge>
                           <StatusBadge tone="gray">자료 {lMats.length}개</StatusBadge>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -782,25 +782,34 @@ export default function AdminLessonsPage() {
                         </div>
                       </div>
 
-                      {/* 피드백 영상 링크 표시 */}
-                      {lesson.feedback_video_url ? (
-                        <div className="mt-3 flex items-center gap-2 rounded-xl bg-[#F7F8FA] px-4 py-2.5">
-                          <span className="shrink-0 text-xs font-bold text-[#6B7684]">영상</span>
-                          <a
-                            href={lesson.feedback_video_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="truncate font-mono text-xs text-[#3182F6] hover:underline"
-                          >
-                            {lesson.feedback_video_url}
-                          </a>
+                      {/* 피드백 요약 카드 */}
+                      <div className="mt-3 grid gap-2 rounded-xl bg-[#F7F8FA] px-4 py-3">
+                        <div className="flex items-start gap-2">
+                          <span className="w-20 shrink-0 text-xs font-bold text-[#6B7684]">피드백 영상</span>
+                          {lesson.feedback_video_url ? (
+                            <a
+                              href={lesson.feedback_video_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="min-w-0 truncate font-mono text-xs text-[#3182F6] hover:underline"
+                            >
+                              {lesson.feedback_video_url}
+                            </a>
+                          ) : (
+                            <span className="text-xs text-[#ADB5BD]">미등록</span>
+                          )}
                         </div>
-                      ) : null}
-
-                      {/* 설명 */}
-                      {lesson.summary ? (
-                        <p className="mt-2 text-sm text-[#6B7684]">{lesson.summary}</p>
-                      ) : null}
+                        <div className="flex items-center gap-2">
+                          <span className="w-20 shrink-0 text-xs font-bold text-[#6B7684]">피드백 자료</span>
+                          <span className="text-xs text-[#4E5968]">{lMats.length}개</span>
+                        </div>
+                        {lesson.summary ? (
+                          <div className="flex items-start gap-2">
+                            <span className="w-20 shrink-0 text-xs font-bold text-[#6B7684]">안내사항</span>
+                            <span className="line-clamp-2 text-xs text-[#4E5968]">{lesson.summary}</span>
+                          </div>
+                        ) : null}
+                      </div>
                     </>
                   )}
 

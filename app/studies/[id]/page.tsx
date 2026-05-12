@@ -103,14 +103,12 @@ export default async function StudyDetailPage({ params }: Props) {
               id: lesson.id,
               order: lesson.order,
               title: lesson.title,
-              summary: lesson.hasVideo
-                ? `피드백 영상 있음 · 자료 ${lesson.materialCount}개`
-                : "아직 피드백 영상이 준비되지 않았어요.",
+              summary: `피드백 영상 ${lesson.hasVideo ? "등록됨" : "미등록"} · 자료 ${lesson.materialCount}개`,
               status: lesson.hasVideo ? "uploaded" : "soon",
               hasNewVideo: lesson.hasVideo,
               materials: [],
               assignment: {
-                title: "",
+                title: null,
                 dueDate: "미정",
                 submitStatus: "pending",
               },
@@ -140,27 +138,17 @@ export default async function StudyDetailPage({ params }: Props) {
                 }`}
               >
                 <div className="mb-3 flex flex-wrap gap-2">
-                  <StatusBadge tone={lesson.hasVideo ? "blue" : "gray"}>
-                    {lesson.order}회차
+                  <StatusBadge tone="blue">{lesson.order}회차</StatusBadge>
+                  <StatusBadge tone={lesson.hasVideo ? "green" : "gray"}>
+                    피드백 영상 {lesson.hasVideo ? "등록됨" : "미등록"}
                   </StatusBadge>
-                  {lesson.hasVideo ? <StatusBadge tone="green">새 영상</StatusBadge> : null}
-                  <StatusBadge tone={lesson.isPublished ? "blue" : "gray"}>
-                    {lesson.isPublished ? "공개중" : "준비중"}
+                  <StatusBadge tone={lesson.materialCount > 0 ? "yellow" : "gray"}>
+                    자료 {lesson.materialCount}개
                   </StatusBadge>
-                  {lesson.materialCount > 0 ? (
-                    <StatusBadge tone="yellow">자료 {lesson.materialCount}개</StatusBadge>
-                  ) : null}
                 </div>
                 <h3 className="text-lg font-black tracking-[-0.03em] text-[#191F28]">
                   {lesson.title}
                 </h3>
-                <p className="mt-2 text-sm leading-6 text-[#6B7684]">
-                  {lesson.hasVideo
-                    ? `피드백 영상 있음 · 자료 ${lesson.materialCount}개`
-                    : lesson.materialCount > 0
-                      ? `자료 ${lesson.materialCount}개`
-                      : "아직 등록된 자료가 없어요."}
-                </p>
                 <div className="mt-4">
                   <Link
                     href={`/studies/${study.id}/lessons/${lesson.id}`}
