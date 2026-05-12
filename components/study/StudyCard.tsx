@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import type { StudyStatus } from "@/types";
@@ -23,12 +24,21 @@ function getStatusMeta(status: StudyStatus) {
 }
 
 export function StudyCard({ study }: Props) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const progress =
     study.totalLessons === 0
       ? 0
       : Math.round((study.completedLessons / study.totalLessons) * 100);
   const statusMeta = getStatusMeta(study.status);
+
+  const handleEnter = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    if (isPending) return;
+    startTransition(() => {
+      router.push(`/studies/${study.id}`);
+    });
+  };
 
   return (
     <article className="rounded-[24px] border border-[#E5E8EB] bg-white p-5 shadow-[0_10px_22px_rgba(25,31,40,0.035)]">
@@ -58,18 +68,22 @@ export function StudyCard({ study }: Props) {
         </div>
       </div>
 
-      <Link
-        href={`/studies/${study.id}`}
-        prefetch={true}
-        aria-disabled={isPending}
-        onClick={() => startTransition(() => {})}
-        className={`mt-5 flex items-center justify-between text-sm font-extrabold transition-opacity ${
-          isPending ? "pointer-events-none opacity-50" : "text-[#3182F6]"
-        }`}
-      >
-        <span>{isPending ? "불러오는 중..." : "스터디룸 입장"}</span>
-        <span aria-hidden>{isPending ? "⋯" : "→"}</span>
-      </Link>
+      {isPending ? (
+        <div className="mt-5 flex items-center gap-2 text-sm font-extrabold text-[#3182F6]">
+          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#3182F6] border-t-transparent" />
+          <span>스터디룸을 불러오는 중...</span>
+        </div>
+      ) : (
+        <Link
+          href={`/studies/${study.id}`}
+          prefetch={true}
+          onClick={handleEnter}
+          className="mt-5 flex items-center justify-between text-sm font-extrabold text-[#3182F6]"
+        >
+          <span>스터디룸 입장</span>
+          <span aria-hidden>→</span>
+        </Link>
+      )}
     </article>
   );
 }
