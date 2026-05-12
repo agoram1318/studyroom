@@ -77,6 +77,16 @@ export type StudySummary = {
   latestUpdate: string;
 };
 
+export type RecentMaterial = {
+  id: string;
+  title: string;
+  studyId: string;
+  studyTitle: string;
+  /** null → "전회차 자료", number → "{n}회차" */
+  lessonOrder: number | null;
+  lessonLabel: string;
+};
+
 export type StudyDetailData = {
   study: StudySummary & { notice: string };
   lessons: LessonPreview[];
@@ -200,6 +210,52 @@ async function queryLesson(
   return { row: data };
 }
 
+// ── 최근 자료 빌드 헬퍼 ──────────────────────────────────────────────────────
+
+type LessonOrderRow = { id: string; lesson_order: number | null };
+
+async function buildRecentMaterials(
+  db: ReturnType<typeof createAdminClient>,
+  materials: MaterialRow[],
+  studyMap: Map<string, string>,
+): Promise<RecentMaterial[]> {
+  if (materials.length === 0) return [];
+
+  // lesson_id 목록 수집 → 한 번만 조회
+  const lessonIds = [
+    ...new Set(materials.filter((m) => m.lesson_id).map((m) => m.lesson_id as string)),
+  ];
+
+  const lessonOrderMap = new Map<string, number>();
+  if (lessonIds.length > 0) {
+    const { data: lessonRows } = await db
+      .from("lessons")
+      .select("id, lesson_order")
+      .in("id", lessonIds)
+      .returns<LessonOrderRow[]>();
+
+    for (const row of lessonRows ?? []) {
+      if (row.lesson_order !== null) {
+        lessonOrderMap.set(row.id, row.lesson_order);
+      }
+    }
+  }
+
+  return materials
+    .filter((m) => m.study_id && studyMap.has(m.study_id))
+    .map((m) => {
+      const lessonOrder = m.lesson_id ? (lessonOrderMap.get(m.lesson_id) ?? null) : null;
+      return {
+        id: m.id,
+        title: m.title ?? "자료",
+        studyId: m.study_id!,
+        studyTitle: studyMap.get(m.study_id!) ?? "스터디",
+        lessonOrder,
+        lessonLabel: lessonOrder !== null ? `${lessonOrder}회차` : "전회차 자료",
+      };
+    });
+}
+
 // ── 스터디 행 → 요약 변환 헬퍼 ───────────────────────────────────────────────
 
 function mapStudyRowsToSummaries(rows: StudyRow[]): StudySummary[] {
@@ -219,27 +275,47 @@ function mapStudyRowsToSummaries(rows: StudyRow[]): StudySummary[] {
 export type DashboardData = {
   studies: StudySummary[];
   teacherName: string | null;
+  recentMaterials: RecentMaterial[];
 };
 
 export async function getDashboardStudies(): Promise<DashboardData> {
   const { supabase, user, role, name } = await getViewer();
 
-  if (!user) return { studies: [], teacherName: null };
+  if (!user) return { studies: [], teacherName: null, recentMaterials: [] };
+
+  const db = createAdminClient();
 
   if (role === "admin") {
-    const { data: dbStudies, error } = await supabase
-      .from("studies")
-      .select("id, title, description, status, lesson_count")
-      .order("created_at", { ascending: false })
-      .returns<StudyRow[]>();
+    // admin: 전체 스터디 + 전체 최신 자료(limit 10)를 병렬 조회
+    const [studiesResult, materialsResult] = await Promise.all([
+      supabase
+        .from("studies")
+        .select("id, title, description, status, lesson_count")
+        .order("created_at", { ascending: false })
+        .returns<StudyRow[]>(),
+      db
+        .from("materials")
+        .select(MATERIAL_FIELDS)
+        .order("created_at", { ascending: false })
+        .limit(10)
+        .returns<MaterialRow[]>(),
+    ]);
 
-    if (error || !dbStudies) {
-      return { studies: buildMockSummaries(), teacherName: name };
+    if (studiesResult.error || !studiesResult.data) {
+      return { studies: buildMockSummaries(), teacherName: name, recentMaterials: [] };
     }
-    return { studies: mapStudyRowsToSummaries(dbStudies), teacherName: name };
+
+    const studyMap = new Map(studiesResult.data.map((s) => [s.id, s.title]));
+    const recentMaterials = await buildRecentMaterials(db, materialsResult.data ?? [], studyMap);
+
+    return {
+      studies: mapStudyRowsToSummaries(studiesResult.data),
+      teacherName: name,
+      recentMaterials,
+    };
   }
 
-  // teacher: studies 와 enrollments 를 병렬로 조회
+  // teacher: studies + enrollments 병렬 조회
   const [studiesResult, enrollmentsResult] = await Promise.all([
     supabase
       .from("studies")
@@ -255,12 +331,33 @@ export async function getDashboardStudies(): Promise<DashboardData> {
   ]);
 
   if (studiesResult.error || !studiesResult.data) {
-    return { studies: buildMockSummaries(), teacherName: name };
+    return { studies: buildMockSummaries(), teacherName: name, recentMaterials: [] };
   }
 
   const allowedIds = new Set((enrollmentsResult.data ?? []).map((e) => e.study_id));
   const filtered = studiesResult.data.filter((study) => allowedIds.has(study.id));
-  return { studies: mapStudyRowsToSummaries(filtered), teacherName: name };
+  const studyMap = new Map(filtered.map((s) => [s.id, s.title]));
+
+  // 허용된 study_id로 최신 자료 조회
+  let recentMaterials: RecentMaterial[] = [];
+  const allowedIdsArray = [...allowedIds];
+  if (allowedIdsArray.length > 0) {
+    const { data: materialsData } = await db
+      .from("materials")
+      .select(MATERIAL_FIELDS)
+      .in("study_id", allowedIdsArray)
+      .order("created_at", { ascending: false })
+      .limit(10)
+      .returns<MaterialRow[]>();
+
+    recentMaterials = await buildRecentMaterials(db, materialsData ?? [], studyMap);
+  }
+
+  return {
+    studies: mapStudyRowsToSummaries(filtered),
+    teacherName: name,
+    recentMaterials,
+  };
 }
 
 /** DB에 스터디가 존재하지만 현재 사용자에게 접근 권한이 없음을 나타내는 sentinel 값 */
