@@ -2,35 +2,14 @@ import Link from "next/link";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { StudyCard } from "@/components/study/StudyCard";
-import { createClient } from "@/lib/supabase/server";
 import { getDashboardStudies } from "@/lib/study-room";
 
-type ProfileRow = {
-  name: string | null;
-};
-
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  let teacherName: string | null = null;
-
-  if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("name")
-      .eq("id", user.id)
-      .single<ProfileRow>();
-
-    teacherName = profile?.name?.trim() || null;
-  }
+  const { studies, teacherName } = await getDashboardStudies();
 
   const heroTitle = teacherName
     ? `${teacherName} 선생님,\n환영합니다`
     : "선생님,\n환영합니다";
-  const studies = await getDashboardStudies();
   const ongoingStudy = studies.find((study) => study.status === "ongoing");
 
   return (

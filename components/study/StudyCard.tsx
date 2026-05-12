@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useTransition } from "react";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import type { StudyStatus } from "@/types";
 
@@ -20,6 +23,7 @@ function getStatusMeta(status: StudyStatus) {
 }
 
 export function StudyCard({ study }: Props) {
+  const [isPending, startTransition] = useTransition();
   const progress =
     study.totalLessons === 0
       ? 0
@@ -56,10 +60,15 @@ export function StudyCard({ study }: Props) {
 
       <Link
         href={`/studies/${study.id}`}
-        className="mt-5 flex items-center justify-between text-sm font-extrabold text-[#3182F6]"
+        prefetch={true}
+        aria-disabled={isPending}
+        onClick={() => startTransition(() => {})}
+        className={`mt-5 flex items-center justify-between text-sm font-extrabold transition-opacity ${
+          isPending ? "pointer-events-none opacity-50" : "text-[#3182F6]"
+        }`}
       >
-        <span>스터디룸 입장</span>
-        <span aria-hidden>→</span>
+        <span>{isPending ? "불러오는 중..." : "스터디룸 입장"}</span>
+        <span aria-hidden>{isPending ? "⋯" : "→"}</span>
       </Link>
     </article>
   );

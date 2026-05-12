@@ -5,6 +5,7 @@ import type { Lesson, Material, Study } from "@/types";
 
 type ProfileRow = {
   role: "admin" | "teacher" | null;
+  name: string | null;
 };
 
 type StudyRow = {
@@ -162,46 +163,23 @@ async function getViewer() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return { supabase, user: null, role: null };
+  if (!user) return { supabase, user: null, role: null, name: null };
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, name")
     .eq("id", user.id)
     .single<ProfileRow>();
 
-  return { supabase, user, role: profile?.role ?? "teacher" };
+  return {
+    supabase,
+    user,
+    role: profile?.role ?? ("teacher" as const),
+    name: profile?.name?.trim() ?? null,
+  };
 }
 
-async function getAllowedStudyIds(userId: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("enrollments")
-    .select("study_id")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .returns<EnrollmentRow[]>();
-
-  return new Set((data ?? []).map((item) => item.study_id));
-}
-
-// ── 회차 조회 헬퍼 (admin client, RLS 우회) ───────────────────────────────────
-
-async function queryLessons(studyId: string): Promise<{ rows: LessonRow[]; error?: string }> {
-  const db = createAdminClient();
-
-  const { data, error } = await db
-    .from("lessons")
-    .select(LESSON_FIELDS)
-    .eq("study_id", studyId)
-    .order("lesson_order", { ascending: true })
-    .returns<LessonRow[]>();
-
-  if (error) {
-    return { rows: [], error: error.message };
-  }
-  return { rows: data ?? [] };
-}
+// ── 단일 회차 조회 헬퍼 (admin client, RLS 우회) ──────────────────────────────
 
 async function queryLesson(
   studyId: string,
@@ -222,30 +200,10 @@ async function queryLesson(
   return { row: data };
 }
 
-// ── 공개 함수 ─────────────────────────────────────────────────────────────────
+// ── 스터디 행 → 요약 변환 헬퍼 ───────────────────────────────────────────────
 
-export async function getDashboardStudies() {
-  const { supabase, user, role } = await getViewer();
-
-  if (!user) return [];
-
-  const { data: dbStudies, error } = await supabase
-    .from("studies")
-    .select("id, title, description, status, lesson_count")
-    .order("created_at", { ascending: false })
-    .returns<StudyRow[]>();
-
-  if (error || !dbStudies) {
-    return buildMockSummaries();
-  }
-
-  let studies = dbStudies;
-  if (role !== "admin") {
-    const allowedIds = await getAllowedStudyIds(user.id);
-    studies = studies.filter((study) => allowedIds.has(study.id));
-  }
-
-  return studies.map((study) => ({
+function mapStudyRowsToSummaries(rows: StudyRow[]): StudySummary[] {
+  return rows.map((study) => ({
     id: study.id,
     title: study.title,
     subtitle: study.description ?? "스터디 상세에서 회차별 피드백을 확인할 수 있어요.",
@@ -254,6 +212,55 @@ export async function getDashboardStudies() {
     totalLessons: study.lesson_count ?? 0,
     latestUpdate: "스터디룸에서 최신 회차를 확인해 주세요.",
   }));
+}
+
+// ── 공개 함수 ─────────────────────────────────────────────────────────────────
+
+export type DashboardData = {
+  studies: StudySummary[];
+  teacherName: string | null;
+};
+
+export async function getDashboardStudies(): Promise<DashboardData> {
+  const { supabase, user, role, name } = await getViewer();
+
+  if (!user) return { studies: [], teacherName: null };
+
+  if (role === "admin") {
+    const { data: dbStudies, error } = await supabase
+      .from("studies")
+      .select("id, title, description, status, lesson_count")
+      .order("created_at", { ascending: false })
+      .returns<StudyRow[]>();
+
+    if (error || !dbStudies) {
+      return { studies: buildMockSummaries(), teacherName: name };
+    }
+    return { studies: mapStudyRowsToSummaries(dbStudies), teacherName: name };
+  }
+
+  // teacher: studies 와 enrollments 를 병렬로 조회
+  const [studiesResult, enrollmentsResult] = await Promise.all([
+    supabase
+      .from("studies")
+      .select("id, title, description, status, lesson_count")
+      .order("created_at", { ascending: false })
+      .returns<StudyRow[]>(),
+    supabase
+      .from("enrollments")
+      .select("study_id")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .returns<EnrollmentRow[]>(),
+  ]);
+
+  if (studiesResult.error || !studiesResult.data) {
+    return { studies: buildMockSummaries(), teacherName: name };
+  }
+
+  const allowedIds = new Set((enrollmentsResult.data ?? []).map((e) => e.study_id));
+  const filtered = studiesResult.data.filter((study) => allowedIds.has(study.id));
+  return { studies: mapStudyRowsToSummaries(filtered), teacherName: name };
 }
 
 /** DB에 스터디가 존재하지만 현재 사용자에게 접근 권한이 없음을 나타내는 sentinel 값 */
@@ -301,27 +308,43 @@ export async function getStudyDetailForViewer(studyId: string): Promise<StudyDet
     };
   }
 
-  // 2. Enrollment 체크 (admin은 모든 스터디 접근 가능)
+  // 2. admin client 준비 (RLS 우회 — 인증·권한은 이후 코드에서 완료)
+  const db = createAdminClient();
+
+  // 3. enrollment 확인(teacher만), 전회차 공통 자료, 회차 목록을 병렬로 조회
+  const [enrollmentResult, studyMatResult, lessonsResult] = await Promise.all([
+    role !== "admin"
+      ? supabase
+          .from("enrollments")
+          .select("study_id")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .returns<EnrollmentRow[]>()
+      : Promise.resolve({ data: null as EnrollmentRow[] | null, error: null }),
+    db
+      .from("materials")
+      .select(MATERIAL_FIELDS)
+      .eq("study_id", studyId)
+      .is("lesson_id", null)
+      .returns<MaterialRow[]>(),
+    db
+      .from("lessons")
+      .select(LESSON_FIELDS)
+      .eq("study_id", studyId)
+      .order("lesson_order", { ascending: true })
+      .returns<LessonRow[]>(),
+  ]);
+
+  // enrollment 체크 (admin은 건너뜀)
   if (role !== "admin") {
-    const allowedIds = await getAllowedStudyIds(user.id);
+    const allowedIds = new Set((enrollmentResult.data ?? []).map((e) => e.study_id));
     if (!allowedIds.has(studyId)) return UNAUTHORIZED;
   }
 
-  // 3. 이후 조회는 admin client 사용 (RLS 우회 — 인증·권한은 위에서 완료)
-  const db = createAdminClient();
-
-  // 전회차 공통 자료 (lesson_id IS NULL)
-  const { data: studyMatRows, error: matError } = await db
-    .from("materials")
-    .select(MATERIAL_FIELDS)
-    .eq("study_id", studyId)
-    .is("lesson_id", null)
-    .returns<MaterialRow[]>();
-
-  const studyMaterials: Material[] = (studyMatRows ?? []).map(mapMaterialRow);
-
-  // 회차 목록 (lesson_order 오름차순, is_published/status 무관하게 모두 조회)
-  const { rows: lessonRows, error: lessonQueryError } = await queryLessons(studyId);
+  const studyMaterials: Material[] = (studyMatResult.data ?? []).map(mapMaterialRow);
+  const lessonRows: LessonRow[] = lessonsResult.data ?? [];
+  const lessonQueryError = lessonsResult.error?.message;
+  const matError = studyMatResult.error;
 
   // 각 회차별 자료 개수 집계 + 자료 데이터 수집
   const lessonIds = lessonRows.map((lesson) => lesson.id);
