@@ -30,7 +30,7 @@ export type Lesson = {
   hasNewVideo?: boolean;
   materials: Material[];
   assignment: {
-    title: string;
+    title: string | null;
     dueDate: string;
     submitStatus: "submitted" | "pending";
   };
