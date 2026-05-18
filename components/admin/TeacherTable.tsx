@@ -14,16 +14,23 @@ export type TeacherRow = {
 
 type Props = {
   teachers: TeacherRow[];
+  isAdmin?: boolean;
 };
 
-export function TeacherTable({ teachers }: Props) {
+const CONFIRM_MESSAGE =
+  "정말 이 참여자 계정을 삭제하시겠습니까?\n삭제하면 해당 참여자의 로그인 계정과 스터디 배정 정보가 함께 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.";
+
+export function TeacherTable({ teachers, isAdmin = false }: Props) {
   const [query, setQuery] = useState("");
+  const [list, setList] = useState<TeacherRow[]>(teachers);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    if (!keyword) return teachers;
+    if (!keyword) return list;
 
-    return teachers.filter((teacher) => {
+    return list.filter((teacher) => {
       const values = [
         teacher.username ?? "",
         teacher.name ?? "",
@@ -33,7 +40,28 @@ export function TeacherTable({ teachers }: Props) {
       ];
       return values.some((value) => value.toLowerCase().includes(keyword));
     });
-  }, [query, teachers]);
+  }, [query, list]);
+
+  async function handleDelete(teacher: TeacherRow) {
+    const confirmed = window.confirm(CONFIRM_MESSAGE);
+    if (!confirmed) return;
+
+    setErrorMsg(null);
+    setDeletingId(teacher.id);
+
+    try {
+      const res = await fetch(`/api/admin/teachers/${teacher.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string };
+        throw new Error(body.error ?? "삭제에 실패했습니다.");
+      }
+      setList((prev) => prev.filter((t) => t.id !== teacher.id));
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "삭제에 실패했습니다.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <section className="rounded-[24px] border border-[#E5E8EB] bg-white p-5 shadow-[0_10px_22px_rgba(25,31,40,0.035)] md:p-6">
@@ -46,6 +74,12 @@ export function TeacherTable({ teachers }: Props) {
           className="h-10 w-full rounded-2xl border border-[#E5E8EB] px-3 text-sm font-semibold outline-none md:w-[320px]"
         />
       </div>
+
+      {errorMsg && (
+        <p className="mb-3 rounded-2xl bg-[#FFF0F0] px-4 py-3 text-sm font-semibold text-[#E53E3E]">
+          {errorMsg}
+        </p>
+      )}
 
       {filtered.length === 0 ? (
         <p className="rounded-2xl bg-[#F7F8FA] px-4 py-3 text-sm font-semibold text-[#6B7684]">
@@ -61,6 +95,7 @@ export function TeacherTable({ teachers }: Props) {
                 <th className="px-4 py-3">아이디</th>
                 <th className="px-4 py-3">전화번호</th>
                 <th className="px-4 py-3">메모</th>
+                {isAdmin && <th className="px-4 py-3 text-right">관리</th>}
               </tr>
             </thead>
             <tbody>
@@ -77,6 +112,18 @@ export function TeacherTable({ teachers }: Props) {
                   </td>
                   <td className="px-4 py-3 font-semibold text-[#4E5968]">{teacher.phone ?? "-"}</td>
                   <td className="px-4 py-3 font-semibold text-[#6B7684]">{teacher.memo ?? "-"}</td>
+                  {isAdmin && (
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(teacher)}
+                        disabled={deletingId === teacher.id}
+                        className="rounded-xl bg-[#FFF0F0] px-3 py-1.5 text-xs font-bold text-[#E53E3E] transition hover:bg-[#FFE0E0] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {deletingId === teacher.id ? "삭제 중..." : "삭제"}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

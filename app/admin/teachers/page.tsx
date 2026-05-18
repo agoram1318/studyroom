@@ -15,6 +15,10 @@ type TeacherProfileRow = {
   memo: string | null;
 };
 
+type CallerProfile = {
+  role: "admin" | "teacher" | null;
+};
+
 export default async function AdminTeachersPage() {
   const supabase = await createClient();
   const {
@@ -23,12 +27,21 @@ export default async function AdminTeachersPage() {
 
   if (!user) redirect("/login");
 
-  const { data: teachers } = await supabase
-    .from("profiles")
-    .select("id, username, name, display_name, phone, memo")
-    .eq("role", "teacher")
-    .order("created_at", { ascending: false })
-    .returns<TeacherProfileRow[]>();
+  const [{ data: callerProfile }, { data: teachers }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single<CallerProfile>(),
+    supabase
+      .from("profiles")
+      .select("id, username, name, display_name, phone, memo")
+      .eq("role", "teacher")
+      .order("created_at", { ascending: false })
+      .returns<TeacherProfileRow[]>(),
+  ]);
+
+  const isAdmin = callerProfile?.role === "admin";
 
   return (
     <div className="space-y-6">
@@ -46,7 +59,7 @@ export default async function AdminTeachersPage() {
         </Link>
       </div>
 
-      <TeacherTable teachers={teachers ?? []} />
+      <TeacherTable teachers={teachers ?? []} isAdmin={isAdmin} />
     </div>
   );
 }
